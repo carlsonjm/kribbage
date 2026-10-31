@@ -1,0 +1,246 @@
+<title>Kribbage Peg Lineup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600&display=swap">
+<style>
+/* Layout: a grid of peg studies, each a small window onto the same stretch of trail, lit the way the game lights it. */
+:root {
+  --piano: #141414;
+  --ghost: #F8F8FF;
+  --soft: rgba(248,248,255,0.66);
+  --raised: #1d1d1f;
+  --line: rgba(248,248,255,0.12);
+  --them: #00D3B8;
+  --ui: 'Noto Sans', system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { background: var(--piano); color: var(--ghost); font-family: var(--ui); }
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; pointer-events: none; }
+.page { position: relative; z-index: 1; padding-block: 24px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1240px; margin: 0 auto; }
+header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+h1 { margin: 0; font-size: 22px; font-weight: 600; text-wrap: balance; }
+header p { margin: 0; color: var(--soft); font-size: 14px; max-width: 64ch; line-height: 1.5; }
+.key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--soft); margin-top: 6px; }
+.key span { display: inline-flex; align-items: center; gap: 6px; }
+.key i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.cell { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); display: flex; flex-direction: column; }
+.cell .view { aspect-ratio: 4 / 3; max-width: 100%; }
+.cell .cap { flex: 1; background: var(--raised); padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 3px; }
+.cell .cap b { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.cell .cap b em { font-style: normal; font-size: 11px; font-weight: 600; color: var(--piano); background: var(--soft); padding: 1px 7px; border-radius: 8px; letter-spacing: 0.04em; }
+.cell .cap span { font-size: 13px; color: var(--soft); line-height: 1.45; }
+.cell .cap .n { color: var(--soft); font-variant-numeric: tabular-nums; font-weight: 400; }
+</style>
+<canvas id="gl"></canvas>
+<div class="page">
+  <header>
+    <h1>Kribbage pegs, eight new tries</h1>
+    <p>Each window is the same patch of forest trail. In each one, your front peg is lit, your back peg sits dark a few holes behind, and the computer's front peg is lit in teal. Classic is today's default, shown for comparison.</p>
+    <div class="key"><span><i style="background: var(--ghost)"></i>Your pegs</span><span><i style="background: var(--them)"></i>Computer's peg</span></div>
+  </header>
+  <div class="grid" id="grid"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const TONES = [
+    { main: '#F8F8FF', dark: '#8f8f9e', light: '#fff4dc' },
+    { main: '#00D3B8', dark: '#00705f', light: '#3ff0d6' }
+  ];
+  const std = (o) => new THREE.MeshStandardMaterial(Object.assign({ roughness: 0.6 }, o));
+  const paint = (t, lit, extra) => std(Object.assign({ color: lit ? t.main : t.dark, emissive: lit ? t.main : '#000000', emissiveIntensity: lit ? 0.18 : 0 }, extra || {}));
+  const brass = std({ color: '#c9a35a', metalness: 0.85, roughness: 0.28 });
+  const wood = std({ color: '#8a6141', roughness: 0.75 });
+  const woodDark = std({ color: '#5a3d25', roughness: 0.8 });
+  const stoneA = std({ color: '#6d6a62', roughness: 0.95, flatShading: true });
+  const stoneB = std({ color: '#7f7a70', roughness: 0.95, flatShading: true });
+  function part(grp, geom, mat, x, y, z, sx, sy, sz, rx, ry, rz) {
+    const m = new THREE.Mesh(geom, mat);
+    m.position.set(x || 0, y || 0, z || 0);
+    m.scale.set(sx || 1, sy || 1, sz || 1);
+    m.rotation.set(rx || 0, ry || 0, rz || 0);
+    m.castShadow = true; grp.add(m); return m;
+  }
+  const glow = (grp, t, y, i, d) => { const l = new THREE.PointLight(t.light, i, d || 140, 2); l.position.y = y; grp.add(l); return l; };
+
+  // Each design builds one peg into `grp` and may return a tick for motion.
+  const DESIGNS = [
+    { id: 'classic', name: 'Classic', now: true, note: 'The slim shaft with a rounded head, as on a wooden board.',
+      build(t, lit, g) {
+        const m = paint(t, lit, { roughness: 0.35 });
+        part(g, new THREE.CylinderGeometry(3.2, 2.4, 34, 14), m, 0, 17);
+        part(g, new THREE.CylinderGeometry(4.2, 4.2, 2.4, 16), m, 0, 33);
+        part(g, new THREE.SphereGeometry(4.2, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), m, 0, 34);
+        if (lit) glow(g, t, 30, 0.5, 120);
+      } },
+    { id: 'brass', name: 'Brass tack', note: 'Polished brass with an enamel cap in your colour. Heavy, like a tournament set.',
+      build(t, lit, g) {
+        part(g, new THREE.CylinderGeometry(2.6, 1.6, 30, 16), brass, 0, 15);
+        part(g, new THREE.TorusGeometry(3.2, 0.9, 8, 20), brass, 0, 30, 0, 1, 1, 1, Math.PI / 2);
+        part(g, new THREE.CylinderGeometry(5.6, 4.6, 6, 20), brass, 0, 34);
+        part(g, new THREE.SphereGeometry(5.4, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), paint(t, lit, { roughness: 0.15, metalness: 0.1, emissiveIntensity: lit ? 0.3 : 0 }), 0, 37, 0, 1, 0.55, 1);
+        if (lit) glow(g, t, 36, 0.45, 110);
+      } },
+    { id: 'acorn', name: 'Acorn', note: 'A painted acorn on a twig. Fits the woods; the back one is the same acorn left unpainted.',
+      build(t, lit, g) {
+        part(g, new THREE.CylinderGeometry(1.4, 1.8, 18, 6), woodDark, 0, 9);
+        const nut = part(g, new THREE.SphereGeometry(7, 18, 14), lit ? paint(t, true, { roughness: 0.3 }) : std({ color: '#9b7a4e', roughness: 0.5 }), 0, 26, 0, 1, 1.25, 1);
+        nut.position.y = 24;
+        part(g, new THREE.SphereGeometry(7.6, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), std({ color: '#6b4a2c', roughness: 0.95, flatShading: true }), 0, 30, 0, 1, 0.7, 1);
+        part(g, new THREE.CylinderGeometry(0.9, 1.2, 5, 5), woodDark, 0, 36.5, 0, 1, 1, 1, 0, 0, 0.3);
+        if (lit) glow(g, t, 26, 0.45, 110);
+      } },
+    { id: 'torch', name: 'Torch', note: 'A wrapped wooden torch. The front one burns in your colour; the back one has gone out.',
+      build(t, lit, g) {
+        part(g, new THREE.CylinderGeometry(1.8, 2.4, 40, 7), wood, 0, 20);
+        part(g, new THREE.CylinderGeometry(3.4, 2.6, 8, 8), std({ color: '#3b2f27', roughness: 1 }), 0, 41);
+        for (let i = 0; i < 3; i++) part(g, new THREE.TorusGeometry(2.3, 0.5, 5, 10), std({ color: '#c8b48a', roughness: 1 }), 0, 30 - i * 5, 0, 1, 1, 1, Math.PI / 2);
+        if (!lit) { part(g, new THREE.SphereGeometry(2.6, 8, 6), std({ color: '#222', roughness: 1 }), 0, 45.5, 0, 1, 0.6, 1); return null; }
+        const flames = [[t.main, 4.2, 14, 0], [t.light, 2.6, 10, 1.2]].map(([c, r, h, o]) =>
+          part(g, new THREE.ConeGeometry(r, h, 7), std({ color: c, emissive: c, emissiveIntensity: 0.6, transparent: true, opacity: 0.92 }), o, 45 + h / 2, -o));
+        flames.forEach((f) => { f.castShadow = false; });
+        const l = glow(g, t, 52, 1.1, 200);
+        return (now, k) => {
+          flames.forEach((f, i) => { const s = 1 + 0.16 * Math.sin(now / (80 + i * 31) + k) + 0.07 * Math.sin(now / 33 + k * 2); f.scale.set(1, s, 1); });
+          l.intensity = 1 + 0.25 * Math.sin(now / 71 + k);
+        };
+      } },
+    { id: 'cairn', name: 'Cairn', note: 'A little stack of trail stones, topped with a painted one. Reads as a trail marker.',
+      build(t, lit, g) {
+        part(g, new THREE.DodecahedronGeometry(6, 0), stoneA, 0, 4, 0, 1.25, 0.65, 1.1, 0, 0.3);
+        part(g, new THREE.DodecahedronGeometry(5, 0), stoneB, 0.6, 11.5, 0, 1.15, 0.6, 1, 0, 1.2);
+        part(g, new THREE.DodecahedronGeometry(4, 0), stoneA, -0.4, 18, 0.4, 1.1, 0.62, 1, 0, 2.1);
+        part(g, new THREE.DodecahedronGeometry(3.6, 0), paint(t, lit, { flatShading: true, roughness: 0.4, emissiveIntensity: lit ? 0.3 : 0 }), 0, 24, 0, 1, 0.8, 1, 0, 0.7);
+        if (lit) glow(g, t, 26, 0.5, 110);
+      } },
+    { id: 'mushroom', name: 'Toadstool', note: 'A pale stem with a cap in your colour and soft spots. Friendly, a little storybook.',
+      build(t, lit, g) {
+        part(g, new THREE.CylinderGeometry(2.6, 3.4, 20, 12), std({ color: '#ece6da', roughness: 0.7 }), 0, 10);
+        part(g, new THREE.SphereGeometry(9, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), paint(t, lit, { roughness: 0.4, emissiveIntensity: lit ? 0.22 : 0 }), 0, 19, 0, 1, 0.75, 1);
+        const spot = std({ color: '#fbfaf6', roughness: 0.6 });
+        [[0, 25.2, 0], [5, 22.5, 3], [-5, 22.4, 3.2], [3.5, 23, -5], [-4.2, 22.8, -4.4]].forEach(([x, y, z]) => part(g, new THREE.SphereGeometry(1.3, 8, 6), spot, x, y, z, 1, 0.45, 1));
+        if (lit) glow(g, t, 18, 0.45, 110);
+      } },
+    { id: 'firefly', name: 'Firefly', note: 'A thin stake with a glowing orb that drifts above it. The back one is a dim ember.',
+      build(t, lit, g) {
+        part(g, new THREE.CylinderGeometry(0.9, 1.3, 26, 6), woodDark, 0, 13);
+        part(g, new THREE.TorusGeometry(2.4, 0.5, 6, 14), brass, 0, 26, 0, 1, 1, 1, Math.PI / 2);
+        const orb = part(g, new THREE.SphereGeometry(lit ? 4 : 2.6, 18, 12), std({ color: lit ? t.main : t.dark, emissive: lit ? t.light : t.dark, emissiveIntensity: lit ? 1.6 : 0.25, roughness: 0.2 }), 0, 34);
+        orb.castShadow = false;
+        if (!lit) return null;
+        const halo = part(g, new THREE.SphereGeometry(7, 16, 10), std({ color: t.light, emissive: t.light, emissiveIntensity: 0.6, transparent: true, opacity: 0.18, depthWrite: false }), 0, 34);
+        halo.castShadow = false;
+        const l = glow(g, t, 34, 1.2, 200);
+        return (now, k) => {
+          const y = 34 + Math.sin(now / 520 + k) * 2.4, x = Math.sin(now / 900 + k) * 1.2;
+          orb.position.set(x, y, 0); halo.position.set(x, y, 0); l.position.set(x, y, 0);
+          halo.scale.setScalar(1 + 0.1 * Math.sin(now / 260 + k));
+        };
+      } },
+    { id: 'pawn', name: 'Turned pawn', note: 'A lathe-turned wooden figure with a painted head. Classic board-game feel, more presence.',
+      build(t, lit, g) {
+        const prof = [[0, 0], [7, 0], [7, 2], [5.4, 3.5], [3, 6], [2.3, 14], [4.4, 16], [4.4, 17.2], [2.6, 18.5]].map(([x, y]) => new THREE.Vector2(x, y));
+        part(g, new THREE.LatheGeometry(prof, 24), lit ? wood : woodDark, 0, 0);
+        part(g, new THREE.SphereGeometry(5.6, 20, 14), paint(t, lit, { roughness: 0.3, emissiveIntensity: lit ? 0.22 : 0 }), 0, 23);
+        if (lit) glow(g, t, 24, 0.45, 110);
+      } },
+    { id: 'kite', name: 'Prism', note: 'A slim faceted spire, like a cut-glass marker. Catches the light as the camera moves.',
+      build(t, lit, g) {
+        part(g, new THREE.CylinderGeometry(5, 6, 3, 6), std({ color: '#3a3836', roughness: 0.6 }), 0, 1.5);
+        const m = std({ color: lit ? t.main : t.dark, emissive: lit ? t.main : '#000000', emissiveIntensity: lit ? 0.3 : 0, flatShading: true, roughness: 0.15, metalness: 0.2 });
+        part(g, new THREE.CylinderGeometry(0.1, 4, 36, 4), m, 0, 21, 0, 1, 1, 1, 0, Math.PI / 4);
+        part(g, new THREE.CylinderGeometry(4, 0.1, 6, 4), m, 0, 0.5 + 3, 0, 1, 1, 1, 0, Math.PI / 4).visible = false;
+        if (lit) glow(g, t, 22, 0.55, 120);
+      } }
+  ];
+
+  // One renderer draws every window, each into its own patch of the screen.
+  const canvas = document.getElementById('gl');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.setScissorTest(true);
+
+  function groundTexture() {
+    const c = document.createElement('canvas'); c.width = c.height = 512;
+    const g = c.getContext('2d');
+    g.fillStyle = '#25331f'; g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 2600; i++) { g.fillStyle = ['#2f4127', '#1b261a', '#3b4e2e'][i % 3]; g.globalAlpha = 0.5; g.beginPath(); g.arc(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 2, 0, 7); g.fill(); }
+    g.globalAlpha = 1;
+    g.fillStyle = '#43362a'; g.fillRect(0, 170, 512, 172);
+    g.fillStyle = '#6f5a42'; g.fillRect(0, 178, 512, 156);
+    g.fillStyle = 'rgba(170,140,100,0.3)';
+    for (let i = 0; i < 900; i++) { g.beginPath(); g.arc(Math.random() * 512, 180 + Math.random() * 150, 0.8 + Math.random() * 1.4, 0, 7); g.fill(); }
+    for (let k = 0; k < 7; k++) for (const y of [228, 284]) {
+      g.fillStyle = 'rgba(210,180,140,0.35)'; g.beginPath(); g.arc(52 + k * 68, y + 1.5, 9.5, 0, 7); g.fill();
+      g.fillStyle = '#120d09'; g.beginPath(); g.arc(52 + k * 68, y, 8.4, 0, 7); g.fill();
+    }
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+  }
+  const groundTex = groundTexture();
+  // Hole spacing on the texture, in world units: the ground is 260 wide.
+  const W = 260, holeX = (k) => -W / 2 + (52 + k * 68) / 512 * W, laneZ = (p) => (p ? 284 : 228) / 512 * W - W / 2;
+
+  const grid = document.getElementById('grid');
+  const views = DESIGNS.map((d, i) => {
+    const cell = document.createElement('div'); cell.className = 'cell';
+    cell.innerHTML = '<div class="view"></div><div class="cap"><b>' + d.name + (d.now ? ' <em>NOW</em>' : '') + '</b><span>' + d.note + '</span></div>';
+    grid.appendChild(cell);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#a9b8a6');
+    scene.fog = new THREE.Fog('#7d8f7a', 400, 900);
+    scene.add(new THREE.HemisphereLight('#cfe0c8', '#2b3322', 0.55));
+    const sun = new THREE.DirectionalLight('#ffe2b0', 1.5);
+    sun.position.set(-160, 260, 120); sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    Object.assign(sun.shadow.camera, { left: -150, right: 150, top: 150, bottom: -150, near: 10, far: 800 });
+    sun.shadow.bias = -0.0008;
+    scene.add(sun);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(W, W), new THREE.MeshStandardMaterial({ map: groundTex, roughness: 1 }));
+    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+    const skirt = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshStandardMaterial({ color: '#25331f', roughness: 1 }));
+    skirt.rotation.x = -Math.PI / 2; skirt.position.y = -0.5; scene.add(skirt);
+    const ticks = [];
+    // Your front peg (lit) and back peg (dark), and the computer's front peg.
+    [[0, true, 4], [0, false, 1], [1, true, 3]].forEach(([p, lit, k], j) => {
+      const grp = new THREE.Group();
+      grp.position.set(holeX(k), 0, laneZ(p));
+      grp.scale.setScalar(1.15);
+      const tick = d.build(TONES[p], lit, grp);
+      if (tick) ticks.push((now) => tick(now, i * 3 + j));
+      scene.add(grp);
+    });
+    const camera = new THREE.PerspectiveCamera(32, 4 / 3, 5, 2000);
+    return { el: cell.querySelector('.view'), scene, camera, ticks, phase: i * 0.7 };
+  });
+
+  function frame(now) {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) renderer.setSize(w, h, false);
+    renderer.setClearColor(0x000000, 0); renderer.setScissorTest(false); renderer.clear(); renderer.setScissorTest(true);
+    for (const v of views) {
+      const r = v.el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > h || r.right < 0 || r.left > w) continue;
+      const a = reduced ? 0.5 : Math.sin(now / 5200 + v.phase) * 0.45 + 0.3;
+      const R = 235, pitch = 0.62;
+      v.camera.position.set(Math.sin(a) * R * Math.cos(pitch), Math.sin(pitch) * R, Math.cos(a) * R * Math.cos(pitch));
+      v.camera.position.x += -18;
+      v.camera.lookAt(-18, 16, 0);
+      v.camera.aspect = r.width / r.height; v.camera.updateProjectionMatrix();
+      if (!reduced) v.ticks.forEach((t) => t(now));
+      const y = h - r.bottom;
+      renderer.setViewport(r.left, y, r.width, r.height);
+      renderer.setScissor(r.left, y, r.width, r.height);
+      renderer.render(v.scene, v.camera);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>

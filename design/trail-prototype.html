@@ -1,0 +1,2060 @@
+<title>Kribbage Trail Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a full-window scene (the trail, seen from a pitched camera) with quiet glass panels laid over it. */
+:root {
+  --piano: #141414;
+  --ghost: #F8F8FF;
+  --ghost-soft: rgba(248,248,255,0.66);
+  --glass: rgba(20,20,20,0.72);
+  --raised: #242424;
+  --line: rgba(248,248,255,0.14);
+  --you: #C8241C;
+  --them: #1F5BC8;
+  --ui: 'Noto Sans', system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--piano); color: var(--ghost); font-family: var(--ui); overflow: hidden; }
+.app { height: 100%; display: flex; flex-direction: column; }
+header {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+#menu-btn { display: inline-flex; align-items: center; gap: 8px; }
+.menu { right: 12px; top: 12px; z-index: 5; width: min(380px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; padding: 8px 16px 16px; box-sizing: border-box; background: rgba(20,20,20,0.92); }
+.menu section + section { border-top: 1px solid var(--line); }
+.menu h2 { margin: 14px 0 8px; font-size: 12px; font-weight: 600; color: var(--ghost-soft); text-transform: uppercase; letter-spacing: 0.06em; }
+.menu .seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.menu .seg button { height: 36px; padding: 0 12px; font-size: 13px; }
+.menu .wide { width: 100%; margin: 4px 0 6px; }
+.menu .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0 2px; font-size: 14px; }
+.menu .switch small { display: block; font-size: 12px; color: var(--ghost-soft); margin-top: 2px; }
+.menu .switch button { flex-shrink: 0; width: 46px; height: 28px; padding: 0; border-radius: 14px; position: relative; background: #3a3a3a; }
+.menu .switch button i { position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--ghost); transition: transform 160ms ease-out; }
+.menu .switch button[aria-checked="true"] { background: #C49BFF; }
+.menu .switch button[aria-checked="true"] i { transform: translateX(18px); }
+header .sub { font-size: 13px; color: var(--ghost-soft); flex: 1 1 200px; min-width: 0; }
+.pills { display: flex; gap: 6px; flex-wrap: wrap; }
+button {
+  font: inherit; font-size: 14px; color: var(--ghost); background: var(--raised);
+  border: none; height: 40px; padding: 0 16px; border-radius: 20px; cursor: pointer;
+  transition: background 140ms ease-out;
+}
+button:hover { background: #333; }
+button:focus-visible { outline: 2px solid var(--ghost); outline-offset: 2px; }
+button[aria-pressed="true"] { background: rgba(248,248,255,0.24); }
+button.primary { background: var(--ghost); color: var(--piano); font-weight: 600; }
+button.primary:hover { background: #e4e4ee; }
+button:disabled { opacity: 0.45; cursor: default; }
+
+.stage {
+  position: relative; flex: 1 1 auto; overflow: hidden; 
+  border-radius: 10px; margin-left: max(16px, env(safe-area-inset-left, 0px)); margin-right: max(16px, env(safe-area-inset-right, 0px));
+  background: #0d120e;
+}
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; transform-style: preserve-3d; will-change: transform; }
+.world canvas { position: absolute; left: 0; top: 0; }
+.bb { position: absolute; left: 0; top: 0; transform-origin: 50% 100%; background-repeat: no-repeat; background-size: 100% 100%; pointer-events: none; }
+.peg { position: absolute; left: 0; top: 0; transform-origin: 50% 100%; pointer-events: none; }
+.peg .pin { width: 100%; height: 100%; }
+.peg.hop .pin { animation: hop 90ms ease-out; }
+@keyframes hop { 0% { transform: translateY(0); } 45% { transform: translateY(-9px); } 100% { transform: translateY(0); } }
+.gain { position: absolute; left: 0; top: 0; transform-origin: 50% 100%; font: 600 30px var(--ui); white-space: nowrap; pointer-events: none;
+  padding: 4px 10px; border-radius: 10px; background: var(--glass); transition: opacity 600ms ease-out; }
+
+.panel { position: absolute; background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 12px; }
+.scores { left: 12px; top: 12px; padding: 12px; display: grid; grid-template-columns: auto auto auto; gap: 6px 12px; align-items: center; font-size: 14px; }
+.scores .dot { width: 10px; height: 10px; border-radius: 50%; }
+.scores .num { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; min-width: 44px; }
+.scores .row-name { color: var(--ghost-soft); }
+.event { left: 50%; top: 12px; transform: translateX(-50%); padding: 8px 14px; font-size: 14px; white-space: nowrap; transition: opacity 200ms ease-out; }
+.map { right: 12px; bottom: 12px; padding: 8px; }
+.map svg { display: block; width: 120px; height: auto; cursor: pointer; }
+.map .mp { cursor: pointer; }
+.map .mp:focus-visible { outline: none; }
+.map .mp:focus-visible .ring { stroke: #F8F8FF; stroke-width: 24; }
+
+footer {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+footer .hint { font-size: 12px; color: var(--ghost-soft); flex: 1 1 240px; min-width: 0; }
+@media (max-width: 560px) { .map svg { width: 84px; } .scores .num { font-size: 18px; } }
+@media (prefers-reduced-motion: reduce) { .peg, .peg .pin { transition: none; animation: none; } }
+
+/* Pegs, cards and the table laid over the scene. */
+.peg { width: 46px; height: 86px; transition: transform 90ms ease-out; }
+[hidden] { display: none !important; }
+.hand .card, .receipt .line { padding: 0; border: none; font: inherit; }
+.hand .card { background: #F8F8FF; color: #141414; }
+.hand .card.red { color: #C2402F; }
+.hand .card:hover { background: #ffffff; }
+.hand .card:disabled { cursor: default; }
+.receipt .line { padding: 0 8px; }
+.glow { position: absolute; left: 0; top: 0; width: 120px; height: 120px; border-radius: 50%; pointer-events: none; transition: transform 90ms ease-out, opacity 300ms ease-out; mix-blend-mode: screen; }
+.winter .glow { mix-blend-mode: normal; }
+.stage { --cw: clamp(54px, 7vw, 100px); --pw: clamp(40px, 4.6vw, 64px); }
+.card { position: relative; flex-shrink: 0; box-sizing: border-box; width: var(--cw); height: calc(var(--cw) * 1.41); border-radius: 10px; background: #F8F8FF; color: #141414; box-shadow: 0 6px 18px rgba(0,0,0,0.45); font-family: var(--ui); transition: transform 220ms cubic-bezier(.33,1,.68,1), opacity 160ms ease-out, box-shadow 160ms ease-out; }
+.card.red { color: #C2402F; }
+.card .idx { position: absolute; left: 9%; top: 6%; display: flex; flex-direction: column; align-items: center; font-weight: 600; line-height: 1; font-size: calc(var(--w) * 0.24); gap: 2px; }
+.card .idx svg { width: calc(var(--w) * 0.15); height: calc(var(--w) * 0.15); }
+.card .pip { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.card .pip svg { width: 46%; height: 46%; }
+.card.back { background: #242424; border: 1px solid #333; box-shadow: inset 0 0 0 4px #242424, inset 0 0 0 5px rgba(248,248,255,0.14), 0 6px 18px rgba(0,0,0,0.45); }
+.card.back .pearls { position: absolute; inset: 0; display: flex; gap: 8%; align-items: center; justify-content: center; }
+.card.back .pearls i { width: 9%; aspect-ratio: 1; border-radius: 50%; background: rgba(248,248,255,0.72); }
+.card.sm { --cw: var(--pw); }
+.card.dim { opacity: 0.38; }
+.card.hl { box-shadow: 0 0 0 3px #F8F8FF, 0 6px 18px rgba(0,0,0,0.45); transform: translateY(-10px); }
+
+.hand { position: absolute; left: 50%; bottom: 10px; width: 0; height: calc(var(--cw) * 1.41 + 30px); }
+.hand .card { position: absolute; left: calc(var(--cw) / -2); bottom: 0; transform-origin: 50% 120%; cursor: pointer; --w: var(--cw); }
+.hand .card:focus-visible { outline: 2px solid #F8F8FF; outline-offset: 3px; }
+.them-hand { position: absolute; right: 12px; top: 12px; display: flex; gap: 4px; }
+.them-hand .card { --cw: 34px; --w: 34px; box-shadow: 0 3px 8px rgba(0,0,0,0.4); }
+
+.table { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--cw) * 1.41 + 48px); display: flex; align-items: center; gap: 16px; padding: 12px 16px; max-width: calc(100% - 32px); box-sizing: border-box; }
+.table .slot { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--ghost-soft); white-space: nowrap; }
+.table .card { --w: var(--pw); }
+.table .stack { display: flex; }
+.table .stack .card + .card { margin-left: calc(var(--pw) * -0.8); }
+.table .sep { width: 1px; align-self: stretch; background: var(--line); }
+.pile { display: flex; align-items: center; min-width: calc(var(--pw) * 2); height: calc(var(--pw) * 1.41 + 28px); }
+.pile .card { margin-left: calc(var(--pw) * -0.42); }
+.pile .card:first-child { margin-left: 0; }
+.pile .card.them { transform: translateY(-12px); box-shadow: 0 0 0 2px var(--them), 0 6px 18px rgba(0,0,0,0.45); }
+.pile .card.you { transform: translateY(12px); }
+.pile .card.hl { transform: translateY(-14px); }
+.pile .empty { font-size: 12px; color: var(--ghost-soft); }
+.count { display: flex; flex-direction: column; align-items: flex-start; min-width: 64px; }
+.count b { font-size: 44px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.count span { font-size: 11px; color: var(--ghost-soft); }
+
+.prompt { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--cw) * 1.41 + 48px + var(--pw) * 1.41 + 76px); padding: 8px 14px; font-size: 15px; white-space: nowrap; }
+.act { position: absolute; right: 160px; bottom: 24px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.act .note { font-size: 12px; color: var(--ghost); text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+.act button { height: 48px; padding: 0 24px; border-radius: 24px; font-size: 15px; }
+
+.receipt { right: 12px; top: 12px; width: min(320px, calc(100% - 24px)); padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+.receipt h2 { margin: 0 0 6px; padding: 0 8px; font-size: 15px; font-weight: 600; }
+.receipt .line { display: grid; grid-template-columns: 76px 1fr 32px 32px; align-items: center; gap: 6px; min-height: 40px; padding: 0 8px; border-radius: 10px; font-size: 14px; cursor: pointer; border: none; background: transparent; color: var(--ghost); text-align: left; height: auto; }
+.receipt .line:hover, .receipt .line.on { background: rgba(248,248,255,0.24); }
+.receipt .line .c { color: var(--ghost-soft); }
+.receipt .line .r { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.receipt .line .p { text-align: right; color: var(--ghost-soft); }
+.receipt .total { display: flex; justify-content: space-between; padding: 10px 8px 2px; margin-top: 4px; border-top: 1px solid var(--line); font-size: 15px; font-weight: 600; }
+.receipt .total b { font-size: 22px; }
+.receipt .none { padding: 8px; color: var(--ghost-soft); font-size: 14px; }
+.sym-r { color: #FF8A7A; }
+
+.banner { left: 50%; top: 38%; transform: translate(-50%, -50%); padding: 24px 28px; text-align: center; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.banner b { font-size: 28px; font-weight: 600; }
+.banner span { color: var(--ghost-soft); font-size: 14px; }
+.scores { top: 12px; }
+@media (max-width: 760px) {
+  .act { right: 12px; bottom: calc(var(--cw) * 1.41 + 40px); }
+  .prompt { white-space: normal; text-align: center; width: max-content; max-width: calc(100% - 32px); }
+  .map { display: none; }
+  .receipt { top: auto; bottom: 8px; }
+}
+.gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.gain { position: absolute; left: 0; top: 0; font: 600 30px var(--ui); white-space: nowrap; pointer-events: none; padding: 4px 10px; border-radius: 10px; background: var(--glass); }
+.scores .fate { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; color: var(--ghost-soft); }
+.scores .fate .bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(248,248,255,0.14); overflow: hidden; min-width: 80px; }
+.scores .fate .bar i { display: block; height: 100%; width: 0; background: #C49BFF; border-radius: 3px; transition: width 600ms cubic-bezier(.33,1,.68,1); }
+.scores .fate.full .bar i { background: #DCC2FF; box-shadow: 0 0 10px #C49BFF; }
+.scores .fate.full #fate-num { color: #DCC2FF; font-weight: 600; }
+.act-row { display: flex; gap: 8px; }
+.scores .match-row { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ghost-soft); }
+.scores .match-row .pips { display: flex; gap: 4px; }
+.scores .match-row .pips i { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px currentColor; }
+.scores .match-row .pips i.on { background: currentColor; }
+#act.fate { background: #C49BFF; color: #141414; box-shadow: 0 0 22px rgba(196,155,255,0.7); }
+.fated { box-shadow: 0 0 0 3px #C49BFF, 0 0 28px rgba(196,155,255,0.8), 0 6px 18px rgba(0,0,0,0.45) !important; }
+.panel, .table, .prompt, .hand, .act, .them-hand { z-index: 2; }
+.gain { z-index: 1; }
+.fly { position: absolute; left: 0; top: 0; z-index: 4; pointer-events: none; will-change: transform; }
+@keyframes arrive { from { opacity: 0; } to { opacity: 1; } }
+.hand.arrive .card { animation: arrive 180ms ease-out both; }
+</style>
+<div class="app">
+  <header>
+    <h1>Kribbage</h1>
+    <span class="sub" id="sub">Single game against a steady opponent</span>
+    <button id="new-game" class="primary">New game</button>
+    <button id="menu-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="menu" title="Menu">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Menu</span>
+    </button>
+  </header>
+
+  <div class="stage" id="stage">
+    <div class="panel scores" aria-live="polite">
+      <span class="dot" style="background: var(--them)"></span><span class="row-name">Computer</span><span class="num" id="score-1">0</span>
+      <span class="dot" style="background: var(--you)"></span><span class="row-name">You</span><span class="num" id="score-0">0</span>
+      <div class="match-row" id="match-row"></div>
+      <div class="fate" id="fate-row"><span>Fate</span><span class="bar"><i id="fate-fill"></i></span><span id="fate-num">0%</span></div>
+    </div>
+    <div class="panel event" id="event" style="opacity: 0">Fifteen two</div>
+    <div class="panel map"><svg id="map" viewBox="400 400 1800 2000" role="group" aria-label="Map of the trail. Choose a peg to look at it."></svg></div>
+    <div class="them-hand" id="them-hand" aria-label="Computer's hand"></div>
+    <div class="panel prompt" id="prompt" aria-live="polite"></div>
+    <div class="panel table" id="table"></div>
+    <div class="hand" id="hand"></div>
+    <div class="act"><span class="note" id="note"></span><span class="act-row"><button id="act2" hidden>Just cut</button><button id="act" class="primary">Lay two in the crib</button></span></div>
+    <div class="panel receipt" id="receipt" hidden></div>
+    <div class="panel banner" id="banner" hidden></div>
+    <div class="panel menu" id="menu" role="dialog" aria-label="Menu" hidden>
+      <section>
+        <h2>New game</h2>
+        <div class="seg" role="group" aria-label="Game length">
+          <button data-len="1" aria-pressed="true">Single</button><button data-len="3" aria-pressed="false">Best of 3</button><button data-len="5" aria-pressed="false">Best of 5</button><button data-len="7" aria-pressed="false">Best of 7</button>
+        </div>
+        <div class="seg" role="group" aria-label="Opponent">
+          <button data-level="easy" aria-pressed="false">Easy</button><button data-level="steady" aria-pressed="true">Steady</button><button data-level="sharp" aria-pressed="false">Sharp</button>
+        </div>
+        <button id="start" class="primary wide">Start</button>
+      </section>
+      <section>
+        <h2>Trail</h2>
+        <div class="seg" role="group" aria-label="Where the trail runs">
+          <button id="env-forest" data-env="forest" aria-pressed="true">Forest</button><button id="env-autumn" data-env="autumn" aria-pressed="false">Autumn</button><button id="env-winter" data-env="winter" aria-pressed="false">Winter</button>
+        </div>
+        <h2>Pegs</h2>
+        <div class="seg" role="group" aria-label="Pegs">
+          <button id="peg-brass" data-peg="brass" aria-pressed="true">Brass</button><button id="peg-slim" data-peg="slim" aria-pressed="false">Classic</button><button id="peg-firefly" data-peg="firefly" aria-pressed="false">Fireflies</button><button id="peg-toadstool" data-peg="toadstool" aria-pressed="false">Toadstools</button><button id="peg-crystal" data-peg="crystal" aria-pressed="false">Crystals</button>
+        </div>
+      </section>
+      <section>
+        <label class="switch"><span>Fate meter<small>Fills on bad luck. Call on it at the cut for the best card.</small></span><button id="fate-toggle" role="switch" aria-checked="true"><i></i></button></label>
+      </section>
+    </div>
+  </div>
+  <div style="height: 16px; flex-shrink: 0;"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  const WORLD = { w: 2600, h: 2800 };
+  const PAD = 400; // ground beyond the trail, so the camera never sees an edge
+  const stage = document.getElementById('stage');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Seeded random so each place grows the same trees every time.
+  function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+  // ---- The trail: a switchback path, four turns, a quarter of the game
+  // between each. Every hairpin has the same three-point shape, and the
+  // legs between them bow gently with no wobble.
+  const CTRL = [
+    [180, 1880], [520, 1895], [900, 1865], [1260, 1810], [1520, 1710], [1600, 1550], [1460, 1425],
+    [1100, 1400], [760, 1390], [460, 1345], [290, 1250], [240, 1100], [380, 995], [640, 965],
+    [960, 955], [1300, 925], [1530, 820], [1590, 650], [1450, 530], [1060, 515], [700, 500],
+    [420, 455], [260, 360], [240, 210], [380, 125], [760, 110], [1150, 120]
+  ];
+  // Centripetal Catmull-Rom: passes through every point without overshoot
+  // or little loops at the tight turns.
+  function catmull(p0, p1, p2, p3, t) {
+    const d = (a, b) => Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])) || 1e-4;
+    const t1 = d(p0, p1), t2 = t1 + d(p1, p2), t3 = t2 + d(p2, p3), u = t1 + (t2 - t1) * t;
+    const L = (a, b, ta, tb) => [0, 1].map((k) => ((tb - u) * a[k] + (u - ta) * b[k]) / (tb - ta));
+    const A1 = L(p0, p1, 0, t1), A2 = L(p1, p2, t1, t2), A3 = L(p2, p3, t2, t3);
+    return L(L(A1, A2, 0, t2), L(A2, A3, t1, t3), t1, t2);
+  }
+  CTRL.forEach((c) => { c[0] += PAD; c[1] += PAD; });
+  const samples = [];
+  for (let i = 0; i < CTRL.length - 1; i++) {
+    const p0 = CTRL[Math.max(0, i - 1)], p1 = CTRL[i], p2 = CTRL[i + 1], p3 = CTRL[Math.min(CTRL.length - 1, i + 2)];
+    for (let j = 0; j < 80; j++) samples.push(catmull(p0 === p1 ? [2 * p1[0] - p2[0], 2 * p1[1] - p2[1]] : p0, p1, p2, p3 === p2 ? [2 * p2[0] - p1[0], 2 * p2[1] - p1[1]] : p3, j / 80));
+  }
+  samples.push(CTRL[CTRL.length - 1]);
+  const arc = [0];
+  for (let i = 1; i < samples.length; i++) arc.push(arc[i - 1] + Math.hypot(samples[i][0] - samples[i - 1][0], samples[i][1] - samples[i - 1][1]));
+  const LENGTH = arc[arc.length - 1];
+  function along(s) {
+    s = Math.max(0, Math.min(LENGTH, s));
+    let lo = 0, hi = arc.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (arc[mid] < s) lo = mid; else hi = mid; }
+    const f = (s - arc[lo]) / ((arc[hi] - arc[lo]) || 1);
+    const a = samples[lo], b = samples[hi];
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+    return { x: a[0] + dx * f, y: a[1] + dy * f, nx: -dy / len, ny: dx / len };
+  }
+  // Holes 1..120 in groups of five, a start hole pair and one shared finish.
+  const START = 90, END_PAD = 90, GAP = 16;
+  const STEP = (LENGTH - START - END_PAD - 23 * GAP) / 119;
+  const LANE = [14, -14]; // you on one side, the computer on the other
+  function sAt(k) {
+    if (k <= 0) return START - 46;
+    if (k >= 121) return START + 119 * STEP + 23 * GAP + 46;
+    return START + (k - 1) * STEP + Math.floor((k - 1) / 5) * GAP;
+  }
+  // Where a skunk line crosses: halfway between hole k and the next.
+  const SKUNK_LINES = [[90, 1], [60, 2]];
+  function skunkS(k) { return (sAt(k) + sAt(k + 1)) / 2; }
+  function holeAt(player, k) {
+    const p = along(sAt(k));
+    const off = k >= 121 ? 0 : LANE[player];
+    return { x: p.x + p.nx * off, y: p.y + p.ny * off };
+  }
+
+  // ---- Places. Each is a ground, a sky, and what grows beside the trail.
+  const PLACES = {
+    forest: {
+      ground: '#25331f', specks: ['#2f4127', '#1b261a', '#3b4e2e', '#2a3522'], patches: ['rgba(72,100,56,0.35)', 'rgba(20,28,18,0.45)'],
+      path: '#6f5a42', pathEdge: '#43362a', pathGrain: 'rgba(170,140,100,0.25)', hole: '#120d09', rim: 'rgba(210,180,140,0.35)',
+      sky: '#a9b8a6', fog: '#7d8f7a', hemiSky: '#cfe0c8', hemiGround: '#2b3322', sun: '#ffe2b0', sunI: 1.5, hemiI: 0.55, hills: 26, exposure: 1.05,
+      trees: [{ kind: 'pine', n: 520, s: 1, colors: ['#1f4029', '#26502f', '#2f6138'] },
+              { kind: 'pine', n: 260, s: 0.7, colors: ['#24432a', '#2d5531', '#3a6a3a'] },
+              { kind: 'bush', n: 140, s: 1, colors: ['#3d6334'] },
+              { kind: 'rock', n: 50, s: 1, colors: ['#5f6159'] }]
+    },
+    autumn: {
+      ground: '#4a2c30', specks: ['#7a3326', '#9a4a22', '#5e2438', '#b07a2c', '#6b3a2a', '#83282c'], patches: ['rgba(140,60,40,0.3)', 'rgba(60,24,40,0.4)'],
+      path: '#8a7660', pathEdge: '#5a4636', pathGrain: 'rgba(214,190,150,0.22)', hole: '#1d1512', rim: 'rgba(235,215,185,0.3)',
+      sky: '#c4b2a2', fog: '#a3918a', hemiSky: '#ead8c6', hemiGround: '#3a2228', sun: '#ffd2a0', sunI: 1.3, hemiI: 0.5, hills: 20, water: true, exposure: 0.95, beach: '#5c4a3e', leaves: true,
+      trees: [{ kind: 'maple', n: 170, s: 1, colors: ['#b8402a', '#d0602c', '#9e2f2a'] },
+              { kind: 'maple', n: 150, s: 0.9, colors: ['#d9902a', '#e4b13a', '#c47a24'] },
+              { kind: 'maple', n: 90, s: 0.85, colors: ['#7a2a3e', '#93344a', '#6a2236'] },
+              { kind: 'birch', n: 80, s: 1, colors: ['#ecebe6', '#e2b23a'] },
+              { kind: 'pine', n: 120, s: 0.9, colors: ['#2a4330', '#33543b', '#3e6648'] },
+              { kind: 'bush', n: 120, s: 1, colors: ['#8e3a2a'] },
+              { kind: 'rock', n: 60, s: 1.2, colors: ['#77706a'] }]
+    },
+    winter: {
+      ground: '#aab5c2', specks: ['#b6c0cc', '#9ba7b5', '#a3aebb', '#c0c9d4'], patches: ['rgba(200,210,224,0.35)', 'rgba(120,134,152,0.3)'],
+      path: '#8794a5', pathEdge: '#6b7889', pathGrain: 'rgba(220,228,238,0.3)', hole: '#232931', rim: 'rgba(230,236,245,0.45)',
+      sky: '#7f8fa3', fog: '#8695a8', hemiSky: '#c4d0de', hemiGround: '#55606e', sun: '#ffd9b8', sunI: 0.9, hemiI: 0.5, hills: 30, snow: true, exposure: 0.82,
+      trees: [{ kind: 'pine', n: 420, s: 1, colors: ['#2b4a3c', '#335646', '#3e6452'] },
+              { kind: 'birch', n: 260, s: 1, colors: ['#ecebe6', null] },
+              { kind: 'rock', n: 50, s: 1, colors: ['#9aa2ac'] }]
+    }
+  };
+
+  function shoreX(y) { return 2040 + Math.sin(y / 140) * 60 + Math.sin(y / 53) * 18; }
+  function inWater(x, y) { return x > shoreX(y); }
+
+  // Distance from any point to the trail, on a coarse grid, so the ground can
+  // stay flat along the trail and roll into hills away from it.
+  const CELL = 20, GW = Math.ceil(WORLD.w / CELL) + 1, GH = Math.ceil(WORLD.h / CELL) + 1;
+  const distGrid = new Float32Array(GW * GH);
+  (function () {
+    const pts = samples.filter((_, i) => i % 3 === 0);
+    for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) {
+      const x = i * CELL, y = j * CELL;
+      let best = 1e9;
+      for (const p of pts) { const dx = p[0] - x, dy = p[1] - y, d = dx * dx + dy * dy; if (d < best) best = d; }
+      distGrid[j * GW + i] = Math.sqrt(best);
+    }
+  })();
+  function distToTrail(x, y) {
+    const i = Math.max(0, Math.min(GW - 1, Math.round(x / CELL))), j = Math.max(0, Math.min(GH - 1, Math.round(y / CELL)));
+    return distGrid[j * GW + i];
+  }
+  const smooth = (a, b, t) => { const u = Math.max(0, Math.min(1, (t - a) / (b - a))); return u * u * (3 - 2 * u); };
+  function heightAt(x, y) {
+    const P = PLACES[place];
+    const d = distToTrail(x, y);
+    let h = P.hills * (Math.sin(x / 173) * Math.cos(y / 211) + 0.6 * Math.sin((x + 2 * y) / 97) + 0.35 * Math.cos((x - y) / 61));
+    h = (h + P.hills * 0.4) * smooth(60, 300, d);
+    // Sink well below the water past the shore, so no hilltop breaks the lake.
+    if (P.water) h -= (46 + P.hills * 2.5) * smooth(shoreX(y) - 40, shoreX(y) + 90, x);
+    return h;
+  }
+  function nearPath(x, y, d) { return distToTrail(x, y) < d; }
+
+  // ---- The 3D stage: renderer, light, camera.
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.domElement.className = 'gl';
+  stage.insertBefore(renderer.domElement, stage.firstChild);
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog('#7d8f7a', 900, 2600);
+  const camera = new THREE.PerspectiveCamera(36, 1, 10, 9000);
+  const hemi = new THREE.HemisphereLight('#ffffff', '#333333', 0.6);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight('#ffffff', 1.4);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -900, right: 900, top: 900, bottom: -900, near: 50, far: 4000 });
+  sun.shadow.bias = -0.0006;
+  sun.shadow.normalBias = 1.5;
+  scene.add(sun); scene.add(sun.target);
+
+  // Several shapes joined into one, each part keeping its own colour.
+  function merge(parts) {
+    let count = 0;
+    const flat = parts.map((p) => {
+      const g = p.geom.index ? p.geom.toNonIndexed() : p.geom.clone();
+      if (p.matrix) g.applyMatrix4(p.matrix);
+      count += g.attributes.position.count;
+      return { g, color: new THREE.Color(p.color).convertSRGBToLinear() };
+    });
+    const pos = new Float32Array(count * 3), nor = new Float32Array(count * 3), col = new Float32Array(count * 3);
+    let o = 0;
+    for (const { g, color } of flat) {
+      g.computeVertexNormals();
+      pos.set(g.attributes.position.array, o * 3);
+      nor.set(g.attributes.normal.array, o * 3);
+      for (let i = 0; i < g.attributes.position.count; i++) { col[(o + i) * 3] = color.r; col[(o + i) * 3 + 1] = color.g; col[(o + i) * 3 + 2] = color.b; }
+      o += g.attributes.position.count;
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return out;
+  }
+  const M = (x, y, z, rx, ry, rz, sx, sy, sz) => new THREE.Matrix4().compose(
+    new THREE.Vector3(x || 0, y || 0, z || 0),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)),
+    new THREE.Vector3(sx || 1, sy || 1, sz || 1));
+
+  function treeGeometry(kind, colors, snow) {
+    if (kind === 'pine') {
+      const parts = [{ geom: new THREE.CylinderGeometry(2.6, 3.6, 26, 6), matrix: M(0, 13), color: '#4a3424' }];
+      const tiers = [[28, 40, 36], [22, 36, 58], [15, 32, 78]];
+      tiers.forEach(([r, h, y], i) => {
+        parts.push({ geom: new THREE.ConeGeometry(r, h, 7), matrix: M(0, y, 0, 0, i * 0.5), color: colors[i] });
+        if (snow) parts.push({ geom: new THREE.ConeGeometry(r * 0.62, h * 0.5, 7), matrix: M(0, y + h * 0.27, 0, 0, i * 0.5), color: '#d6dde6' });
+      });
+      return merge(parts);
+    }
+    if (kind === 'birch') {
+      const parts = [{ geom: new THREE.CylinderGeometry(2.4, 3, 96, 6), matrix: M(0, 48), color: colors[0] }];
+      [[30, 0.6, 0.3], [52, -0.7, 1.9], [70, 0.5, 3.6], [84, -0.4, 5]].forEach(([y, rz, ry]) =>
+        parts.push({ geom: new THREE.CylinderGeometry(0.8, 1.2, 26, 4), matrix: M(Math.sin(rz) * -12 * Math.cos(ry), y + 9, Math.sin(ry) * 6, 0, ry, rz), color: colors[0] }));
+      [14, 40, 63, 88].forEach((y) => parts.push({ geom: new THREE.CylinderGeometry(2.55, 2.55, 3, 6), matrix: M(0, y), color: '#2a2a2a' }));
+      if (colors[1]) parts.push({ geom: new THREE.IcosahedronGeometry(22, 0), matrix: M(0, 96, 0, 0, 0, 0, 1, 0.8, 1), color: colors[1] });
+      return merge(parts);
+    }
+    if (kind === 'maple') {
+      // A broad, rounded crown made of three leafy lumps.
+      const parts = [{ geom: new THREE.CylinderGeometry(2.6, 3.8, 40, 6), matrix: M(0, 20), color: '#4b3226' },
+        { geom: new THREE.CylinderGeometry(1, 1.4, 22, 4), matrix: M(-7, 40, 0, 0, 0, 0.7), color: '#4b3226' }];
+      [[0, 58, 0, 26, colors[0]], [-15, 50, 8, 18, colors[1]], [14, 50, -6, 19, colors[2]], [4, 70, -4, 16, colors[1]]].forEach(([x, y, z, r, c]) =>
+        parts.push({ geom: new THREE.IcosahedronGeometry(r, 0), matrix: M(x, y, z, 0, x, 0, 1, 0.85, 1), color: c }));
+      return merge(parts);
+    }
+    if (kind === 'bush') return merge([{ geom: new THREE.IcosahedronGeometry(1, 0), matrix: M(0, 5, 0, 0, 0, 0, 15, 11, 15), color: colors[0] }]);
+    return merge([{ geom: new THREE.DodecahedronGeometry(1, 0), matrix: M(0, 4, 0, 0, 0, 0, 22, 13, 17), color: colors[0] }]);
+  }
+
+  // ---- Draw a place: the ground (painted canvas on rolling terrain), then
+  // everything that stands on it.
+  let place = 'forest';
+  let placeGroup = null;
+  const pegs = [];   // [player] = { front, back, uFront, uBack }
+
+  function paintGround() {
+    const P = PLACES[place];
+    const scale = 1.25;
+    const canvas = document.createElement('canvas');
+    canvas.width = WORLD.w * scale; canvas.height = WORLD.h * scale;
+    const g = canvas.getContext('2d');
+    g.scale(scale, scale);
+    const r = rng(place.length * 977 + 13);
+    g.fillStyle = P.ground; g.fillRect(0, 0, WORLD.w, WORLD.h);
+    for (let i = 0; i < 130; i++) {
+      const x = r() * WORLD.w, y = r() * WORLD.h, rad = 60 + r() * 180;
+      const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+      grd.addColorStop(0, P.patches[i % 2]); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+    for (let i = 0; i < (P.leaves ? 30000 : 16000); i++) {
+      g.fillStyle = P.specks[i % P.specks.length];
+      g.globalAlpha = 0.35 + r() * 0.5;
+      g.beginPath(); g.ellipse(r() * WORLD.w, r() * WORLD.h, 1 + r() * 3, 1 + r() * 2, r() * 3, 0, Math.PI * 2); g.fill();
+    }
+    g.globalAlpha = 1;
+    if (P.water) {
+      g.beginPath(); g.moveTo(WORLD.w, 0);
+      for (let y = 0; y <= WORLD.h; y += 10) g.lineTo(shoreX(y) + 30, y);
+      g.lineTo(WORLD.w, WORLD.h); g.closePath();
+      g.fillStyle = P.beach || '#7d7a6c'; g.fill();
+    }
+    const line = (w, color) => { g.beginPath(); samples.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.lineWidth = w; g.strokeStyle = color; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke(); };
+    line(80, P.pathEdge); line(66, P.path);
+    if (P.leaves) {
+      // Fallen leaves drift onto the trail's edges.
+      for (let i = 0; i < 2600; i++) {
+        const p = along(r() * LENGTH), o = (r() < 0.5 ? -1 : 1) * (22 + r() * 18);
+        g.fillStyle = P.specks[i % P.specks.length]; g.globalAlpha = 0.55 + r() * 0.4;
+        g.beginPath(); g.ellipse(p.x + p.nx * o, p.y + p.ny * o, 1.6 + r() * 2.2, 1 + r() * 1.2, r() * 3, 0, Math.PI * 2); g.fill();
+      }
+      g.globalAlpha = 1;
+    }
+    g.fillStyle = P.pathGrain;
+    for (let i = 0; i < 3500; i++) {
+      const p = along(r() * LENGTH), o = (r() - 0.5) * 58;
+      g.beginPath(); g.arc(p.x + p.nx * o, p.y + p.ny * o, 0.8 + r() * 1.6, 0, Math.PI * 2); g.fill();
+    }
+    const drawHole = (h, rad) => {
+      g.fillStyle = P.rim; g.beginPath(); g.ellipse(h.x, h.y + 1.2, rad + 1.2, rad + 1, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = P.hole; g.beginPath(); g.arc(h.x, h.y, rad, 0, Math.PI * 2); g.fill();
+    };
+    // Skunk lines: a black band with a white stripe across the trail, just
+    // past hole 90 (skunk) and hole 60 (double skunk, two stripes).
+    for (const [k, stripes] of SKUNK_LINES) {
+      const p = along(skunkS(k));
+      const across = (w, color, off) => {
+        g.beginPath();
+        g.moveTo(p.x - p.nx * 40 - p.ny * off, p.y - p.ny * 40 + p.nx * off);
+        g.lineTo(p.x + p.nx * 40 - p.ny * off, p.y + p.ny * 40 + p.nx * off);
+        g.lineWidth = w; g.strokeStyle = color; g.lineCap = 'butt'; g.stroke();
+      };
+      across(stripes === 2 ? 14 : 10, '#141414', 0);
+      if (stripes === 2) { across(2.4, '#F8F8FF', -3); across(2.4, '#F8F8FF', 3); } else across(3, '#F8F8FF', 0);
+    }
+    for (let k = 0; k <= 120; k++) for (const p of [0, 1]) drawHole(holeAt(p, k), k === 0 ? 5.5 : 4.4);
+    drawHole(holeAt(0, 121), 7);
+    return canvas;
+  }
+
+  function signTexture(text, wood, sub) {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = wood; g.fillRect(0, 0, 128, 64);
+    if (sub) {
+      // A skunk board: black, with a white stripe down the middle.
+      g.fillStyle = '#F8F8FF'; g.fillRect(0, 29, 128, 5);
+      g.fillStyle = '#F8F8FF'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '600 24px "Noto Sans", sans-serif'; g.fillText(text, 64, 15);
+      g.font = '600 17px "Noto Sans", sans-serif'; g.fillText(sub, 64, 50);
+      const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+    }
+    g.fillStyle = 'rgba(0,0,0,0.18)'; for (let i = 0; i < 6; i++) g.fillRect(0, 8 + i * 10, 128, 2);
+    g.fillStyle = '#F8F8FF'; g.font = '600 34px "Noto Sans", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, 64, 34);
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+  }
+
+  // ---- Life along the trail, about one thing every 40 holes: a campfire,
+  // a critter, birds. Each has a spot cleared of trees and a tick to animate.
+  const AMBIENT_AT = [[20, 1], [62, -1], [102, 1]];
+  let ambient = [];
+  function ambientSpots() {
+    return AMBIENT_AT.map(([k, side]) => {
+      const p = along(sAt(k));
+      return { x: p.x + p.nx * 105 * side, y: p.y + p.ny * 105 * side };
+    });
+  }
+  const mat = (color, extra) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.85, flatShading: true }, extra || {}));
+  function campfire(x, y) {
+    const grp = new THREE.Group();
+    const add = (geom, m, px, py, pz, rx, ry, rz) => { const o = new THREE.Mesh(geom, m); o.position.set(px, py, pz); o.rotation.set(rx || 0, ry || 0, rz || 0); o.castShadow = true; o.receiveShadow = true; grp.add(o); return o; };
+    const stone = mat(place === 'winter' ? '#7c8592' : '#6d6a62');
+    for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; add(new THREE.DodecahedronGeometry(4.2, 0), stone, Math.cos(a) * 15, 2, Math.sin(a) * 15, i, i * 2, 0); }
+    const log = mat('#5b3f2a');
+    for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + 0.4; add(new THREE.CylinderGeometry(1.8, 2.2, 26, 6), log, Math.cos(a) * 4, 7, Math.sin(a) * 4, 0, -a, 1.05).rotation.order = 'YZX'; }
+    add(new THREE.CylinderGeometry(5, 5, 40, 8), log, -38, 5, 14, 0, 0.5, Math.PI / 2);
+    const flames = [];
+    const fl = [['#ffb347', 6, 20, 0, 0], ['#ff7a2a', 4.5, 15, 3, 2], ['#ffd27a', 3.5, 12, -3, -2]];
+    for (const [c, r, h, ox, oz] of fl) {
+      const f = add(new THREE.ConeGeometry(r, h, 6), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.7, roughness: 1, transparent: true, opacity: 0.92 }), ox, 8 + h / 2, oz);
+      f.castShadow = false; f.userData.h = h; flames.push(f);
+    }
+    const light = new THREE.PointLight('#ff9a4a', 0.9, 260, 2); light.position.set(0, 44, 0); grp.add(light);
+    const smoke = [];
+    for (let i = 0; i < 6; i++) {
+      const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(5, 0), new THREE.MeshStandardMaterial({ color: '#c8c8c8', transparent: true, opacity: 0.3, roughness: 1, depthWrite: false }));
+      grp.add(puff); smoke.push(puff);
+    }
+    grp.position.set(x, heightAt(x, y), y);
+    grp.scale.setScalar(1.5);
+    placeGroup.add(grp);
+    ambient.push((now) => {
+      flames.forEach((f, i) => { const k = 1 + 0.18 * Math.sin(now / (70 + i * 23) + i) + 0.08 * Math.sin(now / 37 + i * 3); f.scale.set(1, k, 1); f.position.y = 8 + f.userData.h * k / 2; });
+      light.intensity = 0.85 + 0.2 * Math.sin(now / 83) + 0.1 * Math.sin(now / 41);
+      smoke.forEach((p, i) => { const t = ((now / 4200) + i / smoke.length) % 1; p.position.set(Math.sin(t * 5 + i) * 6 + t * 18, 28 + t * 120, Math.cos(t * 4 + i) * 5); p.scale.setScalar(0.6 + t * 2.2); p.material.opacity = 0.32 * (1 - t); });
+    });
+  }
+  function critter(x, y) {
+    // A fox in the woods and the autumn leaves, a hare in the snow.
+    const fox = place !== 'winter';
+    const coat = mat(fox ? '#c0652b' : place === 'winter' ? '#e4e7ec' : '#8b7660');
+    const pale = mat(fox ? '#f2e8dc' : place === 'winter' ? '#f7f8fa' : '#cdbfa8');
+    const dark = mat('#2a2522');
+    const body = new THREE.Group(), head = new THREE.Group(), grp = new THREE.Group();
+    const add = (to, geom, m, px, py, pz, sx, sy, sz, rx, rz) => { const o = new THREE.Mesh(geom, m); o.position.set(px, py, pz); o.scale.set(sx || 1, sy || 1, sz || 1); o.rotation.set(rx || 0, 0, rz || 0); o.castShadow = true; to.add(o); return o; };
+    const ball = new THREE.SphereGeometry(1, 10, 8);
+    if (fox) {
+      add(body, ball, coat, 0, 13, 0, 7, 6.5, 13);
+      add(body, ball, coat, 0, 10, 4, 5, 4.5, 7, 0, 0).material = pale;
+      for (const [lx, lz] of [[-3.5, 7], [3.5, 7], [-3.5, -7], [3.5, -7]]) add(body, new THREE.CylinderGeometry(1.3, 1.1, 9, 5), dark, lx, 4.5, lz);
+      const tail = add(body, ball, coat, 0, 14, -17, 4, 4, 11, 0.5); tail.rotation.x = -0.6;
+      add(body, ball, coat, 0, 17.5, -25, 2.6, 2.6, 3.6, 0.5).material = pale;
+      add(head, ball, coat, 0, 0, 0, 5.5, 5, 5.5);
+      add(head, new THREE.ConeGeometry(2.6, 8, 5), pale, 0, -1.2, 6, 1, 1, 1, Math.PI / 2);
+      add(head, ball, coat, 0, -1.2, 10, 1.1, 1.1, 1.1).material = dark;
+      add(head, new THREE.ConeGeometry(2.4, 6, 4), coat, -3, 5.5, -0.5); add(head, new THREE.ConeGeometry(2.4, 6, 4), coat, 3, 5.5, -0.5);
+      head.position.set(0, 21, 12);
+    } else {
+      add(body, ball, coat, 0, 10, 0, 7, 7.5, 9.5);
+      add(body, ball, coat, 0, 12, -9, 3.2, 3.2, 3.2).material = pale;
+      for (const [lx, lz] of [[-4, 6], [4, 6]]) add(body, ball, coat, lx, 3, lz, 1.6, 2.4, 2.6);
+      for (const [lx, lz] of [[-5, -4], [5, -4]]) add(body, ball, coat, lx, 3, lz, 2.6, 2.8, 6);
+      add(head, ball, coat, 0, 0, 0, 4.6, 4.8, 5.6);
+      add(head, ball, coat, 0, -0.8, 5.4, 0.9, 0.8, 0.8).material = dark;
+      add(head, ball, coat, -1.8, 9, -1.5, 1.4, 6, 0.8, -0.15, 0.15); add(head, ball, coat, 1.8, 9, -1.5, 1.4, 6, 0.8, -0.15, -0.15);
+      head.position.set(0, 18, 8);
+    }
+    body.add(head); grp.add(body);
+    const rr = rng(place.length * 17 + 3);
+    const facing = rr() * Math.PI * 2;
+    grp.rotation.y = facing;
+    grp.position.set(x, heightAt(x, y), y);
+    placeGroup.add(grp);
+    // Mostly still, an ear on the trail; every few seconds a hop, a look round.
+    ambient.push((now) => {
+      const cyc = (now / 1000) % 7;
+      const hop = cyc > 5.2 && cyc < 5.8 ? Math.sin((cyc - 5.2) / 0.6 * Math.PI) : 0;
+      body.position.y = hop * (fox ? 6 : 10);
+      head.rotation.y = Math.sin(now / 1700) * 0.7 * (cyc < 5 ? 1 : 0.2);
+      head.rotation.x = cyc > 2 && cyc < 3.2 ? 0.35 * Math.sin((cyc - 2) / 1.2 * Math.PI) : 0;
+      grp.rotation.y = facing + Math.floor(now / 7000) * 1.7;
+    });
+  }
+  function birds(x, y) {
+    const n = 4, flock = [];
+    const color = '#2b2a28';
+    const m = new THREE.MeshStandardMaterial({ color, roughness: 0.8, side: THREE.DoubleSide, flatShading: true });
+    const wingGeo = new THREE.BufferGeometry();
+    wingGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, -3, 0, 0, 4, 13, 0, -1]), 3));
+    wingGeo.computeVertexNormals();
+    for (let i = 0; i < n; i++) {
+      const b = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.SphereGeometry(1, 6, 4), m); body.scale.set(2, 2, 6); body.castShadow = true;
+      const lw = new THREE.Mesh(wingGeo, m), rw = new THREE.Mesh(wingGeo, m);
+      rw.scale.x = -1; lw.castShadow = rw.castShadow = true;
+      b.add(body, lw, rw);
+      placeGroup.add(b);
+      flock.push({ b, lw, rw, r: 70 + i * 22, h: 150 + i * 14, sp: 0.00042 + i * 0.00005, ph: i * 1.6 });
+    }
+    const gy = heightAt(x, y);
+    ambient.push((now) => {
+      for (const f of flock) {
+        const a = now * f.sp + f.ph;
+        f.b.position.set(x + Math.cos(a) * f.r, gy + f.h + Math.sin(now / 900 + f.ph) * 8, y + Math.sin(a) * f.r * 0.7);
+        f.b.rotation.y = -a;
+        const flap = Math.sin(now / 110 + f.ph * 3) * 0.7 * (Math.sin(now / 2300 + f.ph) > -0.3 ? 1 : 0.15);
+        f.lw.rotation.z = flap; f.rw.rotation.z = -flap;
+      }
+    });
+  }
+  function addAmbient() {
+    ambient = [];
+    const [a, b, c] = ambientSpots();
+    campfire(a.x, a.y);
+    critter(b.x, b.y);
+    birds(c.x, c.y);
+  }
+
+  function build() {
+    const P = PLACES[place];
+    if (placeGroup) { scene.remove(placeGroup); placeGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { if (m.map) m.map.dispose(); m.dispose(); }); } }); }
+    placeGroup = new THREE.Group();
+    scene.add(placeGroup);
+    scene.background = new THREE.Color(P.sky);
+    scene.fog.color.set(P.fog);
+    hemi.color.set(P.hemiSky); hemi.groundColor.set(P.hemiGround); hemi.intensity = P.hemiI;
+    sun.color.set(P.sun); sun.intensity = P.sunI;
+    renderer.toneMappingExposure = P.exposure || 1.05;
+    stage.classList.toggle('winter', !!P.snow);
+
+    // Ground: a wide skirt beyond the board so the horizon never shows an edge.
+    const tex = new THREE.CanvasTexture(paintGround());
+    tex.encoding = THREE.sRGBEncoding;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const geo = new THREE.PlaneGeometry(WORLD.w, WORLD.h, 260, 280);
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(WORLD.w / 2, 0, WORLD.h / 2);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
+    geo.computeVertexNormals();
+    const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+    ground.receiveShadow = true;
+    placeGroup.add(ground);
+    const skirt = new THREE.Mesh(new THREE.PlaneGeometry(20000, 20000), new THREE.MeshStandardMaterial({ color: P.ground, roughness: 1 }));
+    skirt.rotation.x = -Math.PI / 2; skirt.position.set(WORLD.w / 2, -140, WORLD.h / 2);
+    placeGroup.add(skirt);
+    if (P.water) {
+      const water = new THREE.Mesh(new THREE.PlaneGeometry(6000, 9000), new THREE.MeshStandardMaterial({ color: '#2f6073', roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.92 }));
+      water.rotation.x = -Math.PI / 2; water.position.set(shoreX(1400) + 3000 - 40, -14, WORLD.h / 2);
+      water.receiveShadow = true;
+      placeGroup.add(water);
+    }
+
+    // Trees, bushes and rocks, one instanced mesh per kind.
+    const r = rng(place.length * 131 + 7);
+    const dummy = new THREE.Object3D();
+    const clear = ambientSpots().slice(0, 2);
+    for (const it of P.trees) {
+      const want = it.n, spots = [];
+      let tries = 0;
+      while (spots.length < want && tries++ < want * 30) {
+        const x = -300 + r() * (WORLD.w + 600), y = -300 + r() * (WORLD.h + 600);
+        if (P.water && inWater(x - 20, y)) continue;
+        if (nearPath(x, y, it.kind === 'bush' ? 50 : it.kind === 'rock' ? 52 : 66)) continue;
+        if (clear.some((c) => Math.hypot(c.x - x, c.y - y) < (it.kind === 'bush' ? 50 : 75))) continue;
+        if (it.kind === 'bush' && !nearPath(x, y, 140)) continue;
+        spots.push([x, y]);
+      }
+      const mesh = new THREE.InstancedMesh(treeGeometry(it.kind, it.colors, P.snow), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }), spots.length);
+      spots.forEach(([x, y], i) => {
+        const s = it.s * (0.75 + r() * 0.55);
+        dummy.position.set(x, heightAt(x, y) - 1, y);
+        dummy.rotation.set(it.kind === 'rock' ? r() * 0.4 : 0, r() * Math.PI * 2, 0);
+        dummy.scale.set(s, s * (it.kind === 'rock' ? 0.6 + r() * 0.6 : 1), s);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      });
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      placeGroup.add(mesh);
+    }
+
+    // Trail markers at each quarter, and a flag at the finish.
+    const wood = place === 'winter' ? '#7b6248' : '#7a5c3c';
+    const post = (k, text, sub) => {
+      const p = k === 0 ? along(sAt(0) - 70) : along(sub ? skunkS(k) : sAt(k)), side = k === 0 ? 0 : sub ? -66 : 60;
+      const x = p.x + p.nx * side, y = p.y + p.ny * side;
+      const grp = new THREE.Group();
+      const board0 = sub ? '#1b1b1b' : wood;
+      const woodMat = new THREE.MeshStandardMaterial({ color: board0, roughness: 0.9 });
+      const pole = new THREE.Mesh(new THREE.BoxGeometry(5, 52, 5), woodMat); pole.position.y = 26;
+      const face = new THREE.MeshStandardMaterial({ map: signTexture(text, board0, sub), roughness: 0.9 });
+      const board = new THREE.Mesh(new THREE.BoxGeometry(52, 26, 4), [woodMat, woodMat, woodMat, woodMat, face, woodMat]); board.position.y = 52;
+      pole.castShadow = board.castShadow = true;
+      grp.add(pole, board);
+      grp.position.set(x, heightAt(x, y), y);
+      placeGroup.add(grp);
+    };
+    post(0, 'Start'); post(30, '30'); post(60, '60'); post(90, '90');
+    post(90, 'Skunk', 'under 91'); post(60, 'Double', 'under 61');
+    addAmbient();
+    const f = holeAt(0, 121);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 90, 6), new THREE.MeshStandardMaterial({ color: '#d8d8e0', metalness: 0.4, roughness: 0.4 }));
+    pole.position.set(f.x - 14, 45, f.y); pole.castShadow = true;
+    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(34, 20), new THREE.MeshStandardMaterial({ color: '#F8F8FF', side: THREE.DoubleSide, roughness: 0.8 }));
+    cloth.position.set(f.x + 3, 79, f.y); cloth.castShadow = true;
+    placeGroup.add(pole, cloth);
+
+    // Pegs: a front peg and a back peg each, in the chosen style.
+    pegs.forEach((pg) => { scene.remove(pg.uFront.group); scene.remove(pg.uBack.group); });
+    const keep = pegs.map((pg) => ({ front: pg.front, back: pg.back }));
+    pegs.length = 0;
+    for (const p of [0, 1]) pegs.push({ front: keep[p] ? keep[p].front : 0, back: keep[p] ? keep[p].back : 0, uFront: makeUnit(p), uBack: makeUnit(p) });
+    placePegs();
+    drawMap();
+  }
+
+  // ---- Pegs, modelled. The front peg is lit; the one left behind goes dark.
+  // Player colours: the traditional red for you and blue for the computer,
+  // on every peg set. The scores, map and pile use the same two.
+  const TONES = [
+    { main: '#C8241C', dark: '#5e1612', light: '#ff8a7a' },
+    { main: '#1F5BC8', dark: '#14306a', light: '#8ab4ff' }
+  ];
+  let pegStyle = 'brass';
+  function setPegStyle(style) {
+    pegStyle = style;
+    placePegs();
+  }
+  const brassMat = new THREE.MeshStandardMaterial({ color: '#c9a35a', metalness: 0.85, roughness: 0.28 });
+  const woodDark = new THREE.MeshStandardMaterial({ color: '#5a3d25', roughness: 0.8 });
+  const PEGS = {
+    brass(t, lit, grp) {
+      // A tournament-board peg: polished brass, enamel top in red or blue.
+      const add = (geom, mat, y, rx) => { const m = new THREE.Mesh(geom, mat); m.position.y = y; if (rx) m.rotation.x = rx; m.castShadow = true; grp.add(m); return m; };
+      add(new THREE.CylinderGeometry(2.6, 1.6, 30, 16), brassMat, 15);
+      add(new THREE.TorusGeometry(3.2, 0.9, 8, 20), brassMat, 30, Math.PI / 2);
+      add(new THREE.CylinderGeometry(5.6, 4.6, 6, 20), brassMat, 34);
+      const top = add(new THREE.SphereGeometry(5.4, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({
+        color: lit ? t.main : t.dark, emissive: lit ? t.main : '#000000', emissiveIntensity: lit ? 0.12 : 0, roughness: 0.25, metalness: 0 }), 37);
+      top.scale.y = 0.55;
+      if (lit) { const l = new THREE.PointLight(t.light, 0.45, 110, 2); l.position.y = 36; grp.add(l); }
+    },
+    firefly(t, lit, grp) {
+      // A thin stake with a glowing orb that drifts above it.
+      const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.3, 26, 6), woodDark); stake.position.y = 13; stake.castShadow = true;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.5, 6, 14), brassMat); ring.position.y = 26; ring.rotation.x = Math.PI / 2;
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(lit ? 4 : 2.6, 18, 12), new THREE.MeshStandardMaterial({
+        color: lit ? t.main : t.dark, emissive: lit ? t.main : t.dark, emissiveIntensity: lit ? 0.9 : 0.25, roughness: 0.2 }));
+      orb.position.y = 34;
+      grp.add(stake, ring, orb);
+      if (!lit) return null;
+      const halo = new THREE.Mesh(new THREE.SphereGeometry(7, 16, 10), new THREE.MeshStandardMaterial({ color: t.main, emissive: t.main, emissiveIntensity: 0.5, transparent: true, opacity: 0.22, depthWrite: false }));
+      const light = new THREE.PointLight(t.light, 1.2, 220, 2);
+      grp.add(halo, light);
+      return (now, k) => {
+        const y = 34 + Math.sin(now / 520 + k) * 2.4, x = Math.sin(now / 900 + k) * 1.2;
+        orb.position.set(x, y, 0); halo.position.set(x, y, 0); light.position.set(x, y, 0);
+        halo.scale.setScalar(1 + 0.1 * Math.sin(now / 260 + k));
+      };
+    },
+    toadstool(t, lit, grp) {
+      // A pale stem, a cap in the player's colour, soft spots.
+      const add = (geom, mat, x, y, z, sy) => { const m = new THREE.Mesh(geom, mat); m.position.set(x, y, z); if (sy) m.scale.set(1, sy, 1); m.castShadow = true; grp.add(m); return m; };
+      add(new THREE.CylinderGeometry(2.6, 3.4, 20, 12), new THREE.MeshStandardMaterial({ color: '#ece6da', roughness: 0.7 }), 0, 10, 0);
+      add(new THREE.SphereGeometry(9, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({
+        color: lit ? t.main : t.dark, emissive: lit ? t.main : '#000000', emissiveIntensity: lit ? 0.22 : 0, roughness: 0.4 }), 0, 19, 0, 0.75);
+      const spot = new THREE.MeshStandardMaterial({ color: '#fbfaf6', roughness: 0.6 });
+      [[0, 25.2, 0], [5, 22.5, 3], [-5, 22.4, 3.2], [3.5, 23, -5], [-4.2, 22.8, -4.4]].forEach(([x, y, z]) => add(new THREE.SphereGeometry(1.3, 8, 6), spot, x, y, z, 0.45));
+      if (lit) { const l = new THREE.PointLight(t.light, 0.45, 110, 2); l.position.y = 18; grp.add(l); }
+    },
+    crystal(t, lit, grp) {
+      // A cluster of six-sided quartz points on a rough stone, lit from a
+      // core inside the main point. The dark one is smoky quartz.
+      const glass = new THREE.MeshStandardMaterial({
+        color: lit ? t.main : '#59616b', emissive: lit ? t.main : '#000000', emissiveIntensity: lit ? 0.4 : 0,
+        roughness: 0.06, metalness: 0.1, flatShading: true, transparent: true, opacity: lit ? 0.82 : 0.9 });
+      const point = (r, h, x, z, lean, turn) => {
+        const p = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.05, h, 6), glass); body.position.y = h / 2;
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(r, r * 2.1, 6), glass); tip.position.y = h + r * 1.05;
+        body.castShadow = tip.castShadow = true;
+        p.add(body, tip);
+        p.position.set(x, 4, z); p.rotation.set(0, turn, lean);
+        grp.add(p);
+        return p;
+      };
+      const main = point(4.6, 26, 0, 0, 0, 0.3);
+      point(2.6, 13, 5.2, 2.4, -0.42, 1.1);
+      point(2.1, 9, -4.6, 1.8, 0.5, 2.3);
+      point(1.6, 7, -1.2, -4.6, 0.25, 0.8).rotation.x = -0.45;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(7, 0), new THREE.MeshStandardMaterial({ color: '#5f5d57', roughness: 0.95, flatShading: true }));
+      rock.scale.set(1.25, 0.55, 1.1); rock.position.y = 2.5; rock.castShadow = true; rock.receiveShadow = true;
+      grp.add(rock);
+      if (!lit) return null;
+      const core = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 22, 6), new THREE.MeshStandardMaterial({ color: t.light, emissive: t.light, emissiveIntensity: 1.4 }));
+      core.position.y = 15; grp.add(core);
+      const light = new THREE.PointLight(t.light, 0.9, 170, 2); light.position.y = 22; grp.add(light);
+      return (now, k) => {
+        main.rotation.y = 0.3 + now / 2600;
+        const pulse = 0.5 + 0.5 * Math.sin(now / 900 + k);
+        glass.emissiveIntensity = 0.32 + 0.16 * pulse;
+        light.intensity = 0.75 + 0.3 * pulse;
+      };
+    },
+    slim(t, lit, grp) {
+      // The classic cribbage peg: a slim shaft with a rounded head.
+      const m = new THREE.MeshStandardMaterial({ color: lit ? t.main : t.dark, emissive: lit ? t.main : '#000000', emissiveIntensity: lit ? 0.18 : 0, roughness: 0.35, metalness: 0.1 });
+      const add = (geom, mm, y) => { const o = new THREE.Mesh(geom, mm); o.position.y = y; o.castShadow = true; grp.add(o); return o; };
+      add(new THREE.CylinderGeometry(3.2, 2.4, 34, 14), m, 17);
+      add(new THREE.CylinderGeometry(4.2, 4.2, 2.4, 16), m, 33);
+      add(new THREE.SphereGeometry(4.2, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), m, 34);
+      if (lit) { const light = new THREE.PointLight(t.light, 0.5, 120, 2); light.position.set(0, 30, 0); grp.add(light); }
+    }
+  };
+  function makeUnit(player) {
+    const group = new THREE.Group();
+    scene.add(group);
+    return { group, player, lit: false, x: 0, y: 0, hop: 0 };
+  }
+  function drawUnit(u, lit) {
+    u.lit = lit;
+    while (u.group.children.length) { const c = u.group.children.pop(); if (c.geometry) c.geometry.dispose(); }
+    u.tick = PEGS[pegStyle](TONES[u.player], lit, u.group) || null;
+    u.group.scale.setScalar(1.15);
+  }
+  function moveUnit(u, k, nudge) {
+    const h = holeAt(u.player, k);
+    u.x = h.x + (nudge || 0); u.y = h.y; u.hop = performance.now();
+    u.group.position.set(u.x, heightAt(u.x, u.y) - 2, u.y);
+  }
+  function placePegs() {
+    pegs.forEach((pg) => {
+      drawUnit(pg.uFront, true); drawUnit(pg.uBack, false);
+      moveUnit(pg.uFront, pg.front, 0);
+      moveUnit(pg.uBack, pg.back, pg.back === pg.front ? -18 : 0);
+      pg.uFront.hop = pg.uBack.hop = 0;
+    });
+  }
+
+  // ---- The camera. It rests on a point of the trail; to reach a point out of
+  // view it lifts, pans and settles, so the jump never feels like a cut.
+  const PITCH = 50;
+  const cam = { x: 0, y: 0, lift: 0 };
+  const AHEAD = 150;  // looks a little short of the peg, so the peg stands above the cards
+  let baseR = 1000;
+  function fit() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    // Wide enough at the pegs to hold about a quarter of the board.
+    const hfov = 2 * Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect);
+    baseR = Math.max(700, Math.min(2000, 520 / Math.tan(hfov / 2)));
+    applyCam();
+  }
+  function applyCam() {
+    const R = baseR * (1 + cam.lift * 1.7);
+    const p = PITCH * Math.PI / 180;
+    const tx = cam.x, tz = cam.y + AHEAD;
+    camera.position.set(tx, Math.sin(p) * R, tz + Math.cos(p) * R);
+    camera.lookAt(tx, 0, tz);
+    scene.fog.near = R * 0.95; scene.fog.far = R * 2.6;
+    sun.position.set(tx - 500, 1100, tz + 300);
+    sun.target.position.set(tx, 0, tz - 150);
+    drawMapCam();
+  }
+  const v3 = new THREE.Vector3();
+  function project(x, y, up) {
+    v3.set(x, heightAt(x, y) + (up || 0), y).project(camera);
+    return { x: (v3.x + 1) / 2 * stage.clientWidth, y: (1 - v3.y) / 2 * stage.clientHeight, ndcX: v3.x, ndcY: v3.y };
+  }
+  function inView(pt) {
+    const p = project(pt.x, pt.y, 30);
+    return Math.abs(p.ndcX) < 0.8 && p.ndcY > -0.1 && p.ndcY < 0.85;
+  }
+  let camAnim = null;
+  function lookAt(pt, force) {
+    if (!force && inView(pt)) return Promise.resolve(false);
+    if (camAnim) camAnim.cancel();
+    const from = { x: cam.x, y: cam.y };
+    const dist = Math.hypot(pt.x - from.x, pt.y - from.y);
+    if (reduced) { cam.x = pt.x; cam.y = pt.y; cam.lift = 0; applyCam(); return Promise.resolve(true); }
+    const dur = Math.max(800, Math.min(1900, 600 + dist * 0.9));
+    const lift = Math.min(0.55, dist / 2200);
+    return new Promise((done) => {
+      let stop = false;
+      const t0 = performance.now();
+      const ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const tick = (now) => {
+        if (stop) return done(false);
+        const t = Math.min(1, (now - t0) / dur), e = ease(t);
+        cam.x = from.x + (pt.x - from.x) * e;
+        cam.y = from.y + (pt.y - from.y) * e;
+        cam.lift = lift * Math.sin(Math.PI * t);
+        applyCam();
+        if (t < 1) requestAnimationFrame(tick); else { cam.lift = 0; applyCam(); camAnim = null; done(true); }
+      };
+      camAnim = { cancel: () => { stop = true; } };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  // ---- Every frame: pegs hop, numbers float, the scene draws.
+  const floats = [];
+  function frame(now) {
+    for (const pg of pegs) for (const u of [pg.uFront, pg.uBack]) {
+      const t = u.hop ? (now - u.hop) / 110 : 1;
+      const lift = t < 1 ? Math.sin(Math.PI * t) * 14 : 0;
+      u.group.position.y = heightAt(u.x, u.y) - 2 + lift;
+      u.group.rotation.y = 0;
+      if (u.tick && !reduced) u.tick(now, u.player * 3 + (u.lit ? 1 : 0));
+    }
+    for (let i = floats.length - 1; i >= 0; i--) {
+      const f = floats[i], t = (now - f.t0) / 1300;
+      if (t >= 1) { f.el.remove(); floats.splice(i, 1); continue; }
+      const p = project(f.x, f.y, 95 + t * 50);
+      f.el.style.transform = 'translate(' + (p.x - f.el.offsetWidth / 2) + 'px,' + p.y + 'px)';
+      f.el.style.opacity = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+    }
+    if (!reduced) for (const tick of ambient) tick(now);
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  // ---- Scoring: the back peg leapfrogs the front one, hole by hole.
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const eventEl = document.getElementById('event');
+  let eventTimer = null;
+  function say(text, hold) {
+    eventEl.textContent = text; eventEl.style.opacity = 1;
+    clearTimeout(eventTimer);
+    if (!hold) eventTimer = setTimeout(() => { eventEl.style.opacity = 0; }, 1900);
+  }
+  function floatGain(player, k, n) {
+    const h = holeAt(player, k);
+    const el = document.createElement('div');
+    el.className = 'gain';
+    el.textContent = '+' + n;
+    el.style.color = TONES[player].main;
+    stage.appendChild(el);
+    floats.push({ el, x: h.x, y: h.y, t0: performance.now() });
+  }
+  async function peg(player, n, why) {
+    if (n <= 0) return;
+    const pg = pegs[player];
+    await lookAt(holeAt(player, pg.front));
+    const target = Math.min(121, pg.front + n);
+    if (why) say((player === 0 ? 'You: ' : 'Computer: ') + why);
+    const mover = pg.uBack;
+    drawUnit(mover, true);
+    const from = Math.max(pg.back, 0);
+    const follow = lookAt(holeAt(player, target));
+    const step = reduced ? 0 : Math.max(40, Math.min(110, 1000 / (target - from)));
+    for (let k = from + 1; k <= target; k++) {
+      if (k <= pg.front && k !== target) continue;
+      moveUnit(mover, k, 0);
+      if (step) await sleep(step);
+    }
+    await follow;
+    drawUnit(pg.uFront, false);
+    pg.back = pg.front; pg.front = target;
+    pg.uBack = pg.uFront; pg.uFront = mover;
+    floatGain(player, target, n);
+    document.getElementById('score-' + player).textContent = target;
+    drawMapPegs();
+    await sleep(260);
+  }
+
+  // ---- Fate. Bad luck fills it: thin hands of your own, big hands for the
+  // computer. Full, the next cut falls exactly where your hand needs it.
+  // Before it is full, the fuller it is, the likelier the cut leans your way.
+  let fate = 0, fateOn = true;
+  function addFate(n) {
+    if (!fateOn) return;
+    fate = Math.max(0, Math.min(100, fate + n));
+    drawFate();
+  }
+  function drawFate() {
+    const bar = $('fate-fill'), row = $('fate-row');
+    row.hidden = !fateOn;
+    bar.style.width = fate + '%';
+    row.classList.toggle('full', fate >= 100);
+    $('fate-num').textContent = fate >= 100 ? 'Ready' : Math.round(fate) + '%';
+  }
+  // Where the cut falls: an index into what is left of the deck.
+  function chooseCut(useFate) {
+    const deck = g.deck, keep = g.hands[0];
+    const random = () => Math.floor(Math.random() * deck.length);
+    if (!fateOn || keep.length !== 4) return { index: random(), fated: false };
+    // Called on, Fate finds the best card. Not called on, a filling meter now
+    // and then leans the cut your way by itself.
+    const leans = !useFate && fate < 100 && Math.random() < fate / 400;
+    if (!useFate && !leans) return { index: random(), fated: false };
+    const ranked = deck.map((c, i) => ({ i, worth: K.handTotal(keep, c) + (g.dealer === 0 ? K.handTotal(g.crib, c, true) * 0.5 : 0) }))
+      .sort((a, b) => b.worth - a.worth);
+    const pick = useFate ? ranked[0] : ranked[Math.floor(Math.random() * Math.min(5, ranked.length))];
+    fate = useFate ? 0 : fate * 0.5;
+    drawFate();
+    return { index: pick.i, fated: true };
+  }
+  // ---- Cards.
+  const SUIT = {
+    h: 'M12 21.2s-7.6-4.7-9.7-9.4C.8 8.3 3 4.8 6.5 4.8c2.2 0 3.7 1.3 4.6 2.8L12 9l.9-1.4c.9-1.5 2.4-2.8 4.6-2.8 3.5 0 5.7 3.5 4.2 7-2.1 4.7-9.7 9.4-9.7 9.4z',
+    d: 'M12 2.2 20.2 12 12 21.8 3.8 12z',
+    s: 'M12 2.2S2.8 9.2 2.8 14.2c0 2.8 2.2 4.6 4.6 4.6 1.7 0 3-.8 3.8-2L9.9 21.8h4.2l-1.3-5c.8 1.2 2.1 2 3.8 2 2.4 0 4.6-1.8 4.6-4.6C21.2 9.2 12 2.2 12 2.2z',
+    c: 'M12 2.4a4.3 4.3 0 0 0-3.8 6.3 4.3 4.3 0 1 0 2.6 7.6l-1.1 5.5h4.6l-1.1-5.5a4.3 4.3 0 1 0 2.6-7.6A4.3 4.3 0 0 0 12 2.4z'
+  };
+  const RL = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  const SYM = { s: '♠', h: '♥', d: '♦', c: '♣' };
+  const NAME = { s: 'spades', h: 'hearts', d: 'diamonds', c: 'clubs' };
+  const icon = (s) => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + SUIT[s] + '" fill="currentColor"/></svg>';
+  function cardEl(c, cls, tag) {
+    const el = document.createElement(tag || 'div');
+    el.className = 'card' + (c.suit === 'h' || c.suit === 'd' ? ' red' : '') + (cls ? ' ' + cls : '');
+    el.innerHTML = '<span class="idx">' + RL[c.rank] + icon(c.suit) + '</span><span class="pip">' + icon(c.suit) + '</span>';
+    el.setAttribute('aria-label', RL[c.rank] + ' of ' + NAME[c.suit]);
+    el.dataset.id = c.rank + c.suit;
+    return el;
+  }
+  function backEl(cls) {
+    const el = document.createElement('div');
+    el.className = 'card back' + (cls ? ' ' + cls : '');
+    el.innerHTML = '<span class="pearls"><i></i><i></i><i></i><i></i></span>';
+    return el;
+  }
+  const cardText = (c) => '<span class="' + (c.suit === 'h' || c.suit === 'd' ? 'sym-r' : '') + '">' + RL[c.rank] + SYM[c.suit] + '</span>';
+
+  // ---- The game, run by the real rules engine.
+  const K = (function () {
+// Cards, the deck and a seeded shuffle. Plain JavaScript with no
+// dependencies, so the same file loads in QML and in node.
+
+const SUITS = ['s', 'h', 'd', 'c'];
+const SUIT_NAMES = { s: 'spades', h: 'hearts', d: 'diamonds', c: 'clubs' };
+const RANK_LABELS = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+
+// A card is { rank: 1..13, suit: 's'|'h'|'d'|'c', id: '5h' }.
+function card(rank, suit) {
+  return { rank, suit, id: RANK_LABELS[rank] + suit };
+}
+
+// Reads '5h', '10s', 'Jd', 'Ac' into a card.
+function parse(id) {
+  const suit = id.slice(-1);
+  const label = id.slice(0, -1).toUpperCase();
+  const rank = RANK_LABELS.indexOf(label);
+  if (rank < 1 || !SUITS.includes(suit)) throw new Error('Not a card: ' + id);
+  return card(rank, suit);
+}
+
+function cards(text) {
+  return text.trim().split(/\s+/).map(parse);
+}
+
+// What a card counts toward fifteen and thirty-one.
+function value(c) {
+  return c.rank > 10 ? 10 : c.rank;
+}
+
+function label(c) {
+  return RANK_LABELS[c.rank] + ' of ' + SUIT_NAMES[c.suit];
+}
+
+function newDeck() {
+  const deck = [];
+  for (const suit of SUITS) {
+    for (let rank = 1; rank <= 13; rank++) deck.push(card(rank, suit));
+  }
+  return deck;
+}
+
+// mulberry32: small, fast, and good enough to shuffle cards. A seed makes a
+// game repeatable, which the tests and any "replay this deal" need.
+function rng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffle(deck, random) {
+  const out = deck.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    const t = out[i]; out[i] = out[j]; out[j] = t;
+  }
+  return out;
+}
+
+function sameCard(a, b) {
+  return a.rank === b.rank && a.suit === b.suit;
+}
+
+function without(hand, gone) {
+  return hand.filter((c) => !gone.some((g) => sameCard(c, g)));
+}
+
+// Counting: a hand or crib at the show, and each card laid in the play.
+// Every score comes back as lines a person can read, the way the counting
+// screen shows them: { kind, cards, points }.
+
+
+function subsets(list, size, start = 0, picked = [], out = []) {
+  if (picked.length === size) { out.push(picked.slice()); return out; }
+  for (let i = start; i < list.length; i++) {
+    picked.push(list[i]);
+    subsets(list, size, i + 1, picked, out);
+    picked.pop();
+  }
+  return out;
+}
+
+function isRun(group) {
+  const ranks = group.map((c) => c.rank).sort((a, b) => a - b);
+  for (let i = 1; i < ranks.length; i++) {
+    if (ranks[i] !== ranks[i - 1] + 1) return false;
+  }
+  return true;
+}
+
+// The show. `hand` is the four kept cards, `starter` the turned card.
+// A crib only counts a flush when all five share a suit.
+function scoreHand(hand, starter, isCrib = false) {
+  const all = starter ? hand.concat([starter]) : hand.slice();
+  const lines = [];
+
+  for (let size = 2; size <= all.length; size++) {
+    for (const group of subsets(all, size)) {
+      if (group.reduce((sum, c) => sum + value(c), 0) === 15) {
+        lines.push({ kind: 'fifteen', cards: group, points: 2 });
+      }
+    }
+  }
+
+  for (const pair of subsets(all, 2)) {
+    if (pair[0].rank === pair[1].rank) lines.push({ kind: 'pair', cards: pair, points: 2 });
+  }
+
+  // Only the longest runs count: a run of four is not also two runs of three.
+  for (let size = all.length; size >= 3; size--) {
+    const runs = subsets(all, size).filter(isRun);
+    if (runs.length) {
+      for (const run of runs) lines.push({ kind: 'run', cards: run, points: size });
+      break;
+    }
+  }
+
+  if (hand.length === 4 && hand.every((c) => c.suit === hand[0].suit)) {
+    const withStarter = starter && starter.suit === hand[0].suit;
+    if (withStarter) lines.push({ kind: 'flush', cards: all, points: 5 });
+    else if (!isCrib) lines.push({ kind: 'flush', cards: hand.slice(), points: 4 });
+  }
+
+  if (starter) {
+    const nob = hand.find((c) => c.rank === 11 && c.suit === starter.suit);
+    if (nob) lines.push({ kind: 'nobs', cards: [nob, starter], points: 1 });
+  }
+
+  return { lines, total: lines.reduce((sum, l) => sum + l.points, 0) };
+}
+
+// The same total as scoreHand, without building lines. The computer calls
+// this tens of thousands of times a hand, so it counts with plain numbers.
+function handTotal(hand, starter, isCrib = false) {
+  const all = starter ? hand.concat([starter]) : hand;
+  const n = all.length;
+  const vals = all.map(value);
+  let total = 0;
+
+  for (let mask = 3; mask < (1 << n); mask++) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) if (mask & (1 << i)) sum += vals[i];
+    if (sum === 15) total += 2;
+  }
+
+  const counts = new Array(15).fill(0);
+  for (const c of all) counts[c.rank]++;
+  for (let r = 1; r <= 13; r++) total += counts[r] * (counts[r] - 1);
+
+  for (let r = 1; r <= 13; r++) {
+    if (!counts[r] || counts[r - 1]) continue;
+    let len = 0, ways = 1;
+    while (r + len <= 13 && counts[r + len]) { ways *= counts[r + len]; len++; }
+    if (len >= 3) total += len * ways;
+  }
+
+  if (hand.length === 4 && hand.every((c) => c.suit === hand[0].suit)) {
+    if (starter && starter.suit === hand[0].suit) total += 5;
+    else if (!isCrib) total += 4;
+  }
+  if (starter && hand.some((c) => c.rank === 11 && c.suit === starter.suit)) total += 1;
+  return total;
+}
+
+function pileCount(pile) {
+  return pile.reduce((sum, c) => sum + value(c), 0);
+}
+
+// The play. `pile` is every card laid since the count last went back to
+// zero, the newest last. Scores what the newest card earned.
+function scorePlay(pile) {
+  const lines = [];
+  const count = pileCount(pile);
+  const last = pile[pile.length - 1];
+  if (!last) return { lines, total: 0 };
+
+  if (count === 15) lines.push({ kind: 'fifteen', cards: pile.slice(), points: 2 });
+  if (count === 31) lines.push({ kind: 'thirty-one', cards: pile.slice(), points: 2 });
+
+  let same = 1;
+  while (same < pile.length && pile[pile.length - 1 - same].rank === last.rank) same++;
+  if (same >= 2) {
+    const kinds = { 2: ['pair', 2], 3: ['three of a kind', 6], 4: ['four of a kind', 12] };
+    const [kind, points] = kinds[same];
+    lines.push({ kind, cards: pile.slice(-same), points });
+  }
+
+  for (let size = pile.length; size >= 3; size--) {
+    const tail = pile.slice(-size);
+    if (new Set(tail.map((c) => c.rank)).size === size && isRun(tail)) {
+      lines.push({ kind: 'run', cards: tail, points: size });
+      break;
+    }
+  }
+
+  return { lines, total: lines.reduce((sum, l) => sum + l.points, 0) };
+}
+
+// One game of two-handed Cribbage, start to finish. The state is a plain
+// object the screen reads; every change goes through the functions below,
+// which refuse illegal moves and record what happened as events the screen
+// can animate (a card laid, points pegged, the count going back to zero).
+//
+// Players are 0 (the person) and 1 (the computer). Nothing here knows which
+// is which: the computer's choices live in ai.mjs.
+
+
+const TARGET = 121;
+const SKUNK = 91;
+const DOUBLE_SKUNK = 61;
+
+function newGame({ seed = Date.now(), dealer = null, manualCut = false } = {}) {
+  const random = rng(seed);
+  const state = {
+    seed,
+    random,
+    manualCut,
+    dealer: dealer === null ? (random() < 0.5 ? 0 : 1) : dealer,
+    scores: [0, 0],
+    backPegs: [0, 0],
+    handNumber: 0,
+    phase: 'discard',
+    hands: [[], []],
+    kept: [[], []],
+    crib: [],
+    discarded: [false, false],
+    deck: [],
+    starter: null,
+    pile: [],
+    pastPiles: [],
+    turn: null,
+    goSaid: [false, false],
+    showStep: 0,
+    show: null,
+    winner: null,
+    events: []
+  };
+  deal(state);
+  return state;
+}
+
+function emit(state, event) {
+  state.events.push(event);
+  return event;
+}
+
+// Takes the events since the screen last asked, so it can play them in order.
+function takeEvents(state) {
+  const out = state.events;
+  state.events = [];
+  return out;
+}
+
+function deal(state) {
+  state.handNumber++;
+  state.deck = shuffle(newDeck(), state.random);
+  state.hands = [[], []];
+  const pone = 1 - state.dealer;
+  for (let i = 0; i < 6; i++) {
+    state.hands[pone].push(state.deck.pop());
+    state.hands[state.dealer].push(state.deck.pop());
+  }
+  state.kept = [[], []];
+  state.crib = [];
+  state.discarded = [false, false];
+  state.starter = null;
+  state.pile = [];
+  state.pastPiles = [];
+  state.goSaid = [false, false];
+  state.turn = null;
+  state.show = null;
+  state.showStep = 0;
+  state.phase = 'discard';
+  emit(state, { type: 'deal', dealer: state.dealer, hand: state.handNumber });
+}
+
+function addPoints(state, player, points, reason, lines = []) {
+  if (points <= 0 || state.phase === 'over') return;
+  state.backPegs[player] = state.scores[player];
+  state.scores[player] = Math.min(TARGET, state.scores[player] + points);
+  emit(state, { type: 'score', player, points, reason, lines, score: state.scores[player] });
+  if (state.scores[player] >= TARGET) {
+    state.winner = player;
+    state.phase = 'over';
+    const loser = state.scores[1 - player];
+    state.skunk = loser < DOUBLE_SKUNK ? 2 : loser < SKUNK ? 1 : 0;
+    emit(state, { type: 'over', winner: player, skunk: state.skunk });
+  }
+}
+
+function fail(message) {
+  throw new Error(message);
+}
+
+// Each player lays two cards in the dealer's crib.
+function discard(state, player, cards) {
+  if (state.phase !== 'discard') fail('Not the time to discard');
+  if (state.discarded[player]) fail('Already discarded');
+  if (cards.length !== 2) fail('Discard exactly two cards');
+  const hand = state.hands[player];
+  if (!cards.every((c) => hand.some((h) => sameCard(h, c)))) fail('Card not in hand');
+  if (sameCard(cards[0], cards[1])) fail('Two different cards');
+  state.hands[player] = without(hand, cards);
+  state.crib.push(...cards);
+  state.discarded[player] = true;
+  emit(state, { type: 'discard', player });
+  if (state.discarded[0] && state.discarded[1]) cut(state);
+}
+
+function cut(state) {
+  // The pone cuts and the dealer turns the top of the lower part: any card
+  // left in the deck. With manualCut the screen chooses where (cutAt);
+  // otherwise it falls at random.
+  if (state.manualCut) {
+    state.phase = 'cut';
+    state.turn = 1 - state.dealer;
+    emit(state, { type: 'cut', player: state.turn });
+    return;
+  }
+  turnStarter(state, Math.floor(state.random() * state.deck.length));
+}
+
+// The cut lands at `index` in what is left of the deck.
+function cutAt(state, index) {
+  if (state.phase !== 'cut') fail('Not the time to cut');
+  if (!(index >= 0 && index < state.deck.length)) fail('No card there');
+  turnStarter(state, Math.floor(index));
+}
+
+function turnStarter(state, index) {
+  state.starter = state.deck.splice(index, 1)[0];
+  state.kept = [state.hands[0].slice(), state.hands[1].slice()];
+  emit(state, { type: 'starter', card: state.starter });
+  state.phase = 'play';
+  if (state.starter.rank === 11) {
+    addPoints(state, state.dealer, 2, 'his heels', [{ kind: 'his heels', cards: [state.starter], points: 2 }]);
+  }
+  state.turn = 1 - state.dealer;
+}
+
+function count(state) {
+  return pileCount(state.pile);
+}
+
+function playable(state, player) {
+  if (state.phase !== 'play') return [];
+  const room = 31 - count(state);
+  return state.hands[player].filter((c) => value(c) <= room);
+}
+
+function mustSayGo(state, player) {
+  return state.phase === 'play' && state.turn === player
+    && state.hands[player].length > 0 && playable(state, player).length === 0;
+}
+
+function out(state, player) {
+  return state.goSaid[player] || state.hands[player].length === 0;
+}
+
+function resetCount(state, leader) {
+  state.pastPiles.push(state.pile);
+  state.pile = [];
+  state.goSaid = [false, false];
+  emit(state, { type: 'reset' });
+  if (state.hands[0].length === 0 && state.hands[1].length === 0) {
+    startShow(state);
+    return;
+  }
+  state.turn = state.hands[leader].length ? leader : 1 - leader;
+}
+
+function play(state, player, c) {
+  if (state.phase !== 'play') fail('Not the time to play');
+  if (state.turn !== player) fail('Not your turn');
+  if (!state.hands[player].some((h) => sameCard(h, c))) fail('Card not in hand');
+  if (count(state) + value(c) > 31) fail('That card would pass 31');
+
+  state.hands[player] = without(state.hands[player], [c]);
+  state.pile.push(c);
+  emit(state, { type: 'play', player, card: c, count: count(state) });
+  const scored = scorePlay(state.pile);
+  addPoints(state, player, scored.total, 'play', scored.lines);
+  if (state.phase === 'over') return;
+
+  const other = 1 - player;
+  const bothEmpty = state.hands[0].length === 0 && state.hands[1].length === 0;
+
+  if (count(state) === 31) {
+    resetCount(state, other);
+    return;
+  }
+  if (bothEmpty) {
+    addPoints(state, player, 1, 'last card', [{ kind: 'last card', cards: [c], points: 1 }]);
+    if (state.phase === 'over') return;
+    resetCount(state, other);
+    return;
+  }
+  if (!out(state, other)) {
+    state.turn = other;
+    return;
+  }
+  // The other player is out for this count, so this player carries on.
+  if (playable(state, player).length) {
+    state.turn = player;
+    return;
+  }
+  addPoints(state, player, 1, 'go', [{ kind: 'go', cards: [c], points: 1 }]);
+  if (state.phase === 'over') return;
+  resetCount(state, other);
+}
+
+function sayGo(state, player) {
+  if (!mustSayGo(state, player)) fail('Go is only for when no card fits');
+  state.goSaid[player] = true;
+  emit(state, { type: 'go', player });
+  const other = 1 - player;
+  if (state.hands[other].length && playable(state, other).length) {
+    state.turn = other;
+    return;
+  }
+  // Nobody can lay a card: whoever laid last pegs one for the go. When the
+  // other player has no cards left they said nothing, so they laid last.
+  addPoints(state, other, 1, 'go', [{ kind: 'go', cards: [], points: 1 }]);
+  if (state.phase === 'over') return;
+  resetCount(state, player);
+}
+
+const SHOW_ORDER = ['pone', 'dealer', 'crib'];
+
+function startShow(state) {
+  state.phase = 'show';
+  state.turn = null;
+  state.showStep = 0;
+  countShowStep(state);
+}
+
+function countShowStep(state) {
+  const step = SHOW_ORDER[state.showStep];
+  const player = step === 'pone' ? 1 - state.dealer : state.dealer;
+  const cards = step === 'crib' ? state.crib : state.kept[player];
+  const result = scoreHand(cards, state.starter, step === 'crib');
+  state.show = Object.assign({ step, player, cards, starter: state.starter }, result);
+  emit(state, { type: 'show', step, player, total: result.total });
+  addPoints(state, player, result.total, step === 'crib' ? 'crib' : 'hand', result.lines);
+}
+
+// Moves the show on: the dealer's hand, then the crib, then the next deal.
+function nextShow(state) {
+  if (state.phase !== 'show') fail('Not counting');
+  if (state.showStep < SHOW_ORDER.length - 1) {
+    state.showStep++;
+    countShowStep(state);
+    return;
+  }
+  state.dealer = 1 - state.dealer;
+  deal(state);
+}
+
+// The computer player, at three strengths:
+//   easy   - keeps whatever looks best on its face, plays for points now
+//   steady - weighs every possible starter, avoids the obvious traps
+//   sharp  - also weighs what the crib is worth to whoever owns it
+// It sees only what a person in its seat would: its own hand, the starter,
+// and the cards already laid.
+
+
+const LEVELS = ['easy', 'steady', 'sharp'];
+
+// How often each level slips: tosses a careless pair of cards, or lays a
+// card without thinking it through.
+const SLIPS = {
+  easy: { discard: 0.6, play: 0.6 },
+  steady: { discard: 0.3, play: 0.25 },
+  sharp: { discard: 0, play: 0 }
+};
+
+function pairs(list) {
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) out.push([list[i], list[j]]);
+  }
+  return out;
+}
+
+// What two cards are likely to bring a crib, from the cards alone. Fives,
+// pairs, fifteens and near-runs make a crib; wide gaps kill it.
+function cribLean(a, b) {
+  let lean = 4.2;
+  if (a.rank === b.rank) lean += 2.3;
+  if (value(a) + value(b) === 15) lean += 1.8;
+  if (a.rank === 5) lean += 1.2;
+  if (b.rank === 5) lean += 1.2;
+  const gap = Math.abs(a.rank - b.rank);
+  if (gap === 1) lean += 0.8;
+  else if (gap === 2) lean += 0.4;
+  else if (gap > 4 && a.rank !== b.rank) lean -= 0.5;
+  if (a.rank === 11 || b.rank === 11) lean += 0.25;
+  return lean;
+}
+
+function chooseDiscard(hand, isDealer, level = 'steady', random = Math.random) {
+  const unseen = without(newDeck(), hand);
+  let best = null;
+  const options = [];
+  for (const toss of pairs(hand)) {
+    const keep = without(hand, toss);
+    let worth;
+    if (level === 'easy') {
+      worth = handTotal(keep, null);
+    } else {
+      let sum = 0;
+      for (const s of unseen) sum += handTotal(keep, s);
+      worth = sum / unseen.length;
+      if (level === 'sharp') worth += (isDealer ? 1 : -1) * cribLean(toss[0], toss[1]);
+    }
+    options.push({ toss, worth });
+    if (!best || worth > best.worth) best = { toss, worth };
+  }
+  const slip = (SLIPS[level] || SLIPS.steady).discard;
+  if (random() < slip) {
+    // Easy tosses any two; Steady keeps one of its next few best.
+    options.sort((a, b) => b.worth - a.worth);
+    const pool = level === 'easy' ? options.length : 4;
+    return options[1 + Math.floor(random() * (pool - 1))].toss;
+  }
+  return best.toss;
+}
+
+// Chooses a card for the play, or null when it has to say go.
+function choosePlay(state, player, level = 'steady', random = Math.random) {
+  const legal = playable(state, player);
+  if (!legal.length) return null;
+  if (random() < (SLIPS[level] || SLIPS.steady).play) return legal[Math.floor(random() * legal.length)];
+
+  const hand = state.hands[player];
+  let best = null;
+  for (const c of legal) {
+    const pile = state.pile.concat([c]);
+    const now = pileCount(pile);
+    let worth = scorePlay(pile).total;
+    if (level !== 'easy') {
+      // Leaving 5 or 21 hands the other player an easy fifteen or 31.
+      if (now === 5 || now === 21) worth -= 1.6;
+      if (state.pile.length === 0) {
+        // Lead under five when possible: nothing then makes fifteen.
+        if (value(c) < 5) worth += 0.8;
+        if (c.rank === 5) worth -= 1.2;
+      }
+      // Save low cards for squeezing in near 31.
+      worth += value(c) * 0.05;
+      if (level === 'sharp') {
+        // Holding a card that answers theirs: lay the one that sets up a
+        // pair royal or a fifteen from what is still in hand.
+        const rest = without(hand, [c]);
+        if (rest.some((r) => r.rank === c.rank) && now + 2 * value(c) <= 31) worth += 0.6;
+        if (rest.some((r) => now + value(r) === 31)) worth += 0.3;
+        // Within one rank of the last card invites a run.
+        const last = state.pile[state.pile.length - 1];
+        if (last && Math.abs(last.rank - c.rank) === 1) worth -= 0.4;
+        if (last && Math.abs(last.rank - c.rank) === 2) worth -= 0.3;
+      }
+    }
+    if (!best || worth > best.worth) best = { card: c, worth };
+  }
+  return best.card;
+}
+
+return { newGame, cutAt, discard, play, sayGo, nextShow, count, playable, mustSayGo, takeEvents, chooseDiscard, choosePlay, handTotal, without };
+})();
+
+  const LEVELS = ['easy', 'steady', 'sharp'];
+  let level = 'steady';
+  // A match: best of 3, 5 or 7 games. A skunk counts as two games won, a
+  // double skunk as three. The loser of each game deals the next.
+  let match = { bestOf: 1, wins: [0, 0], recorded: false };
+  let pickLen = 1, pickLevel = 'steady';
+  const needed = () => (match.bestOf + 1) / 2;
+  const matchOver = () => match.wins[0] >= needed() || match.wins[1] >= needed();
+  function drawMatch() {
+    $('match-row').hidden = match.bestOf === 1;
+    const n = needed();
+    const pips = (p) => { let h = ''; for (let i = 0; i < n; i++) h += '<i class="' + (i < match.wins[p] ? 'on' : '') + '"></i>'; return h; };
+    $('match-row').innerHTML = '<span>Match</span><span>Best of ' + match.bestOf + '</span>' +
+      '<span>Computer</span><span class="pips" style="color: var(--them)">' + pips(1) + '</span>' +
+      '<span>You</span><span class="pips" style="color: var(--you)">' + pips(0) + '</span>';
+  }
+  function recordGame() {
+    if (match.recorded || !g || g.phase !== 'over') return;
+    match.recorded = true;
+    match.wins[g.winner] = Math.min(needed(), match.wins[g.winner] + 1 + (g.skunk || 0));
+    drawMatch();
+  }
+  let fatedStarter = false, awaitingFate = false;
+  let g = null, sel = [], pileView = [], working = false, receipt = null, hilite = -1, dealing = false;
+
+  // A short riffle shuffle in the middle of the table, then six cards each,
+  // one at a time, the pone first.
+  async function shuffleAndDeal(dealer) {
+    if (reduced) return;
+    const w = stage.clientWidth, h = stage.clientHeight;
+    const cw = parseFloat(getComputedStyle(stage).getPropertyValue('--pw')) || 56;
+    const cx = w / 2 - cw / 2, cy = h * 0.42 - cw * 0.7;
+    const at = (x, y, r) => 'translate(' + x + 'px,' + y + 'px) rotate(' + (r || 0) + 'deg)';
+    const made = [];
+    const card = () => { const el = backEl('sm fly'); stage.appendChild(el); made.push(el); return el; };
+    // Two halves part, lean, and riffle back together, twice.
+    const halves = [card(), card(), card(), card()];
+    halves.forEach((el, i) => { el.style.transform = at(cx, cy - i * 1.5); });
+    for (let pass = 0; pass < 2; pass++) {
+      await Promise.all(halves.map((el, i) => el.animate([
+        { transform: at(cx, cy - i * 1.5) },
+        { transform: at(cx + (i % 2 ? 1 : -1) * cw * 0.62, cy - i * 1.5 - 4, (i % 2 ? 1 : -1) * 7), offset: 0.45 },
+        { transform: at(cx, cy - i * 1.5) }
+      ], { duration: 340, easing: 'cubic-bezier(.33,1,.68,1)' }).finished));
+    }
+    // Then the deal, card by card.
+    const youAt = { x: w / 2 - cw / 2, y: h - cw * 1.6 };
+    const themAt = { x: w - cw * 3.4, y: 12 };
+    const flights = [];
+    for (let i = 0; i < 12; i++) {
+      const to = (i % 2 === 0) === (dealer === 1) ? youAt : themAt;
+      const el = card();
+      const spread = (Math.floor(i / 2) - 2.5) * cw * 0.45;
+      flights.push(el.animate([
+        { transform: at(cx, cy - 6) },
+        { transform: at(to.x + spread, to.y, (Math.floor(i / 2) - 2.5) * 4) }
+      ], { duration: 300, easing: 'cubic-bezier(.33,1,.68,1)', fill: 'forwards' }).finished);
+      await sleep(70);
+    }
+    await Promise.all(flights);
+    halves.forEach((el) => el.remove());
+    await sleep(60);
+    made.forEach((el) => el.remove());
+  }
+  const $ = (id) => document.getElementById(id);
+
+  const KIND = { fifteen: 'fifteen', 'thirty-one': 'thirty-one', pair: 'pair', 'three of a kind': 'three of a kind', 'four of a kind': 'four of a kind', run: 'run', flush: 'flush', nobs: 'nobs' };
+  function why(e) {
+    if (e.reason === 'hand') return 'hand of ' + e.points;
+    if (e.reason === 'crib') return 'crib of ' + e.points;
+    if (e.reason === 'go') return 'one for the go';
+    if (e.reason === 'last card') return 'one for last card';
+    if (e.reason === 'his heels') return 'two for his heels';
+    return e.lines.map((l) => (l.kind === 'run' ? 'run of ' + l.points : KIND[l.kind] || l.kind) + ' for ' + l.points).join(', ');
+  }
+
+  async function handle(e) {
+    if (e.type === 'deal') {
+      // Each deal adds a little, so Fate comes round two or three times a game.
+      if (e.hand > 1) addFate(20);
+      pileView = []; receipt = null; sel = []; hilite = -1; fatedStarter = false;
+      say(e.dealer === 0 ? 'Your deal, so the crib is yours' : 'The computer deals, so the crib is its');
+      dealing = true; render();
+      await shuffleAndDeal(e.dealer);
+      dealing = false; render();
+      $('hand').classList.add('arrive'); setTimeout(() => $('hand').classList.remove('arrive'), 300);
+      await sleep(200);
+    } else if (e.type === 'starter') {
+      render(); say((fatedStarter ? 'Fate: the cut falls on the ' : 'Starter: ') + RL[e.card.rank] + ' of ' + NAME[e.card.suit]); await sleep(fatedStarter ? 1300 : 700);
+    } else if (e.type === 'play') {
+      pileView.push({ c: e.card, p: e.player }); render(); await sleep(260);
+    } else if (e.type === 'go') {
+      say(e.player === 0 ? 'You say go' : 'Computer says go'); await sleep(800);
+    } else if (e.type === 'reset') {
+      await sleep(900); pileView = []; render();
+    } else if (e.type === 'show') {
+      receipt = { step: e.step, player: e.player, cards: g.show.cards.slice(), lines: g.show.lines, total: e.total };
+      hilite = -1; render();
+      if (e.player === 0 && e.step !== 'crib' || e.player === 0 && e.step === 'crib' && e.total < 4) addFate(e.total <= 2 ? 45 : e.total < 6 ? 30 : e.total < 8 ? 12 : 0);
+      if (e.player === 1 && e.total >= 10) addFate(20);
+      await sleep(600);
+    } else if (e.type === 'score') {
+      if (e.player === 1 && e.reason === 'play' && e.points >= 4) addFate(10);
+      await peg(e.player, e.points, why(e));
+    } else if (e.type === 'over') {
+      recordGame();
+      render();
+    }
+  }
+
+  async function after() {
+    working = true; render();
+    for (;;) {
+      const evs = K.takeEvents(g);
+      for (const e of evs) await handle(e);
+      if (g.phase === 'discard' && !g.discarded[1]) {
+        K.discard(g, 1, K.chooseDiscard(g.hands[1], g.dealer === 1, level)); continue;
+      }
+      if (g.phase === 'cut') {
+        if (fateOn && fate >= 100) { awaitingFate = true; break; }
+        render();
+        say(g.turn === 0 ? 'You cut the deck' : 'The computer cuts the deck');
+        await sleep(800);
+        const c = chooseCut(false);
+        fatedStarter = c.fated;
+        K.cutAt(g, c.index);
+        continue;
+      }
+      if (g.phase === 'play' && g.turn === 1) {
+        render(); await sleep(850);
+        if (K.mustSayGo(g, 1)) K.sayGo(g, 1); else K.play(g, 1, K.choosePlay(g, 1, level));
+        continue;
+      }
+      break;
+    }
+    working = false; render();
+  }
+
+  function sorted(hand) { return hand.slice().sort((a, b) => a.rank - b.rank || a.suit.localeCompare(b.suit)); }
+  const same = (a, b) => a.rank === b.rank && a.suit === b.suit;
+
+  function render() {
+    if (!g) return;
+    const phase = g.phase;
+    // The computer's hand, face down.
+    const th = $('them-hand'); th.innerHTML = '';
+    if (!dealing && (phase === 'discard' || phase === 'play')) for (let i = 0; i < g.hands[1].length; i++) th.appendChild(backEl());
+    th.hidden = phase === 'show';
+
+    // Your hand, held as a fan.
+    const hand = $('hand'); hand.innerHTML = '';
+    const cards = !dealing && (phase === 'discard' || phase === 'play') ? sorted(g.hands[0]) : [];
+    const legal = phase === 'play' ? K.playable(g, 0) : cards;
+    const mid = (cards.length - 1) / 2;
+    cards.forEach((c, i) => {
+      const off = i - mid;
+      const picked = sel.some((s) => same(s, c));
+      const can = phase === 'discard' || (g.turn === 0 && legal.some((l) => same(l, c)));
+      const el = cardEl(c, (phase === 'play' && !can) || working && phase === 'play' && g.turn !== 0 ? 'dim' : '', 'button');
+      el.style.transform = 'translateX(calc(var(--cw) * ' + (off * 0.8).toFixed(2) + ')) translateY(' + (Math.abs(off) * Math.abs(off) * 5 - (picked ? 30 : 0)) + 'px) rotate(' + (off * 5) + 'deg)';
+      el.onclick = () => choose(c);
+      el.disabled = working || !can;
+      hand.appendChild(el);
+    });
+
+    // The table: starter, crib, the cards laid, the count.
+    const t = $('table'); t.innerHTML = '';
+    const slot = (label, ...els) => { const s = document.createElement('div'); s.className = 'slot'; const box = document.createElement('div'); box.className = 'stack'; els.forEach((x) => box.appendChild(x)); s.appendChild(box); s.insertAdjacentHTML('beforeend', '<span>' + label + '</span>'); t.appendChild(s); return box; };
+    const starter = g.starter ? cardEl(g.starter, 'sm' + (fatedStarter ? ' fated' : '') + (receipt && hilite >= 0 && receipt.lines[hilite].cards.some((x) => same(x, g.starter)) ? ' hl' : '')) : backEl('sm');
+    slot('Starter', starter);
+    const cribEls = []; for (let i = 0; i < Math.max(1, g.crib.length); i++) cribEls.push(backEl('sm' + (g.crib.length ? '' : ' dim')));
+    if (!(receipt && receipt.step === 'crib')) slot(g.dealer === 0 ? 'Your crib' : 'Its crib', ...cribEls);
+    const sep = document.createElement('div'); sep.className = 'sep'; t.appendChild(sep);
+    const pile = document.createElement('div'); pile.className = 'pile';
+    if (receipt) {
+      receipt.cards.forEach((c) => pile.appendChild(cardEl(c, 'sm' + (hilite >= 0 && receipt.lines[hilite].cards.some((x) => same(x, c)) ? ' hl' : ''))));
+    } else if (pileView.length) {
+      pileView.forEach((v) => pile.appendChild(cardEl(v.c, 'sm ' + (v.p === 0 ? 'you' : 'them'))));
+    } else {
+      pile.innerHTML = '<span class="empty">' + (phase === 'play' ? 'Lay a card' : 'The play starts here') + '</span>';
+    }
+    t.appendChild(pile);
+    const cnt = document.createElement('div'); cnt.className = 'count';
+    cnt.innerHTML = receipt ? '<b>' + receipt.total + '</b><span>points</span>' : '<b>' + (phase === 'play' ? K.count(g) : 0) + '</b><span>of 31</span>';
+    t.appendChild(cnt);
+
+    // What to do now, and the one button for it.
+    const prompt = $('prompt'), act = $('act'), note = $('note');
+    const act2 = $('act2');
+    note.textContent = ''; act.hidden = false; act.disabled = working; act2.hidden = true;
+    act.classList.toggle('fate', phase === 'cut' && awaitingFate);
+    if (dealing) {
+      prompt.textContent = 'Shuffling and dealing'; act.hidden = true;
+    } else if (phase === 'discard') {
+      prompt.textContent = 'Choose two cards for ' + (g.dealer === 0 ? 'your crib' : "the computer's crib");
+      act.textContent = 'Lay two in the crib';
+      act.disabled = working || sel.length !== 2;
+      if (sel.length === 2) note.textContent = 'The four you keep: ' + K.handTotal(K.without(g.hands[0], sel), null) + ' in hand';
+    } else if (phase === 'cut' && awaitingFate) {
+      prompt.textContent = 'Fate is full. Call on it, and the cut falls on the best card for your hand.';
+      act.textContent = 'Call on Fate'; act.disabled = false;
+      act2.hidden = false;
+    } else if (phase === 'cut') {
+      prompt.textContent = 'Cutting for the starter'; act.hidden = true;
+    } else if (phase === 'play') {
+      const go = K.mustSayGo(g, 0);
+      prompt.textContent = g.turn === 0 ? (go ? 'Nothing fits under 31. Say go.' : 'Your turn. Lay a card.') : 'The computer is thinking';
+      act.textContent = 'Go';
+      act.hidden = !(g.turn === 0 && go);
+    } else if (phase === 'show' && !receipt) {
+      prompt.textContent = 'Counting'; act.hidden = true;
+    } else if (phase === 'show') {
+      const who = receipt.step === 'crib' ? (receipt.player === 0 ? 'Your crib' : "The computer's crib") : (receipt.player === 0 ? 'Your hand' : "The computer's hand");
+      prompt.textContent = who + ' counts ' + receipt.total;
+      act.textContent = receipt.step === 'crib' ? 'Deal the next hand' : g.showStep === 0 ? "Count the dealer's hand" : 'Turn the crib';
+    } else if (phase === 'over' && working) {
+      prompt.textContent = 'Pegging out'; act.hidden = true;
+    } else if (phase === 'over') {
+      prompt.textContent = g.winner === 0 ? 'You pegged out' : 'The computer pegged out';
+      act.textContent = match.bestOf === 1 ? 'Play again' : matchOver() ? 'New match' : 'Next game';
+    }
+
+    // The count of a hand, line by line.
+    const r = $('receipt');
+    r.hidden = !receipt || phase === 'over';
+    if (receipt) {
+      let run = 0;
+      const title = receipt.step === 'crib' ? (receipt.player === 0 ? 'Your crib' : "The computer's crib") : (receipt.player === 0 ? 'Your hand' : "The computer's hand");
+      r.innerHTML = '<h2>' + title + '</h2>' + (receipt.lines.length ? receipt.lines.map((l, i) => {
+        run += l.points;
+        const label = l.kind === 'run' ? 'Run of ' + l.points : l.kind.charAt(0).toUpperCase() + l.kind.slice(1);
+        return '<button class="line' + (i === hilite ? ' on' : '') + '" data-i="' + i + '"><span>' + label + '</span><span class="c">' + l.cards.map(cardText).join(' ') + '</span><span class="p">+' + l.points + '</span><span class="r">' + run + '</span></button>';
+      }).join('') : '<div class="none">Nothing scores. Nineteen, as they say.</div>') +
+        '<div class="total"><span>Total</span><b>' + receipt.total + '</b></div>';
+      r.querySelectorAll('.line').forEach((b) => {
+        const i = Number(b.dataset.i);
+        b.onmouseenter = () => setHilite(i);
+        b.onfocus = () => setHilite(i);
+        b.onclick = () => setHilite(hilite === i ? -1 : i);
+      });
+    }
+
+    const banner = $('banner');
+    banner.hidden = phase !== 'over' || working;
+    if (phase === 'over') {
+      const other = g.scores[1 - g.winner];
+      const w = match.wins, done = match.bestOf > 1 && matchOver();
+      const standing = done
+        ? (w[0] > w[1] ? 'You win the match, ' : 'The computer wins the match, ') + Math.max(w[0], w[1]) + ' to ' + Math.min(w[0], w[1]) + '.'
+        : w[0] === w[1] ? 'The match is level at ' + w[0] + ' each.'
+        : (w[0] > w[1] ? 'You lead the match ' : 'The computer leads the match ') + Math.max(w[0], w[1]) + ' to ' + Math.min(w[0], w[1]) + '. First to ' + needed() + '.';
+      banner.innerHTML = '<b>' + (done ? (w[0] > w[1] ? 'Match won' : 'Match lost') : g.winner === 0 ? 'You won, 121 to ' + other : 'The computer won, 121 to ' + other) + '</b>' +
+        (done ? '<span>' + (g.winner === 0 ? 'You won the last game, 121 to ' : 'The computer won the last game, 121 to ') + other + '.</span>' : '') + '<span>' +
+        (g.skunk === 2 ? 'A double skunk: under 61.' + (match.bestOf > 1 ? ' That counts as three games.' : '') : g.skunk === 1 ? 'A skunk: under 91.' + (match.bestOf > 1 ? ' That counts as two games.' : '') : 'Pegged out on the trail.') + '</span>' + (match.bestOf > 1 ? '<span>' + standing + '</span>' : '');
+    }
+  }
+
+  // Lifts the cards that make one line of the count, without redrawing.
+  function setHilite(i) {
+    hilite = i;
+    const ids = i >= 0 && receipt ? receipt.lines[i].cards.map((c) => c.rank + c.suit) : [];
+    document.querySelectorAll('#receipt .line').forEach((b) => b.classList.toggle('on', Number(b.dataset.i) === i));
+    document.querySelectorAll('#table .card[data-id]').forEach((el) => el.classList.toggle('hl', ids.includes(el.dataset.id)));
+  }
+
+  function choose(c) {
+    if (working || !g) return;
+    if (g.phase === 'discard') {
+      const i = sel.findIndex((s) => same(s, c));
+      if (i >= 0) sel.splice(i, 1); else if (sel.length < 2) sel.push(c); else { sel.shift(); sel.push(c); }
+      render();
+    } else if (g.phase === 'play' && g.turn === 0) {
+      try { K.play(g, 0, c); } catch (err) { say(err.message); return; }
+      after();
+    }
+  }
+  function cutWith(useFate) {
+    awaitingFate = false;
+    const c = chooseCut(useFate);
+    fatedStarter = c.fated;
+    K.cutAt(g, c.index);
+    after();
+  }
+  $('act2').onclick = () => { if (!working && g && g.phase === 'cut') cutWith(false); };
+  $('act').onclick = () => {
+    if (working || !g) return;
+    if (g.phase === 'cut' && awaitingFate) { cutWith(true); return; }
+    try {
+      if (g.phase === 'discard') { K.discard(g, 0, sel); sel = []; }
+      else if (g.phase === 'play') K.sayGo(g, 0);
+      else if (g.phase === 'show') { receipt = null; K.nextShow(g); }
+      else if (g.phase === 'over') { if (matchOver()) { match.wins = [0, 0]; newGame(); } else newGame(1 - g.winner); return; }
+    } catch (err) { say(err.message); return; }
+    after();
+  };
+  // ---- The menu: what a new game will be, and how the trail looks.
+  const menu = $('menu'), menuBtn = $('menu-btn');
+  function openMenu(open) {
+    menu.hidden = !open;
+    menuBtn.setAttribute('aria-expanded', String(open));
+    if (open) {
+      menu.querySelectorAll('[data-len]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.len) === pickLen)));
+      menu.querySelectorAll('[data-level]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.level === pickLevel)));
+      menu.querySelector('[data-len][aria-pressed="true"]').focus();
+    } else menuBtn.focus();
+  }
+  menuBtn.onclick = () => openMenu(menu.hidden);
+  $('new-game').onclick = () => openMenu(true);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) openMenu(false); });
+  stage.addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target)) openMenu(false); });
+  menu.querySelectorAll('[data-len]').forEach((b) => b.onclick = () => {
+    pickLen = Number(b.dataset.len);
+    menu.querySelectorAll('[data-len]').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+  });
+  menu.querySelectorAll('[data-level]').forEach((b) => b.onclick = () => {
+    pickLevel = b.dataset.level;
+    menu.querySelectorAll('[data-level]').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+  });
+  $('start').onclick = () => {
+    if (working) { say('One moment, the computer is moving'); return; }
+    level = pickLevel;
+    match = { bestOf: pickLen, wins: [0, 0], recorded: false };
+    menu.hidden = true; menuBtn.setAttribute('aria-expanded', 'false');
+    newGame();
+  };
+
+  // ---- The map in the corner: the whole trail, both pegs, where you are looking.
+  const mapEl = document.getElementById('map');
+  function drawMap() {
+    const d = samples.filter((_, i) => i % 4 === 0).map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(0) + ' ' + p[1].toFixed(0)).join(' ');
+    const tick = (k, w) => { const p = along(skunkS(k)); return '<line x1="' + (p.x - p.nx * 70) + '" y1="' + (p.y - p.ny * 70) + '" x2="' + (p.x + p.nx * 70) + '" y2="' + (p.y + p.ny * 70) + '" stroke="#141414" stroke-width="' + w + '"/><line x1="' + (p.x - p.nx * 70) + '" y1="' + (p.y - p.ny * 70) + '" x2="' + (p.x + p.nx * 70) + '" y2="' + (p.y + p.ny * 70) + '" stroke="#F8F8FF" stroke-width="10"/>'; };
+    const pegDot = (p, fill, name) => '<g class="mp" id="map-' + p + '" tabindex="0" role="button" aria-label="Look at ' + name + '"><circle r="160" fill="transparent"/><circle class="ring" r="60" fill="' + fill + '" stroke="transparent"/></g>';
+    mapEl.innerHTML = '<path d="' + d + '" fill="none" stroke="rgba(248,248,255,0.35)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>' +
+      tick(60, 44) + tick(90, 36) +
+      '<path id="map-cam" fill="none" stroke="rgba(248,248,255,0.7)" stroke-width="14" stroke-linecap="round" pointer-events="none"/>' +
+      pegDot(1, TONES[1].main, "the computer's peg") + pegDot(0, TONES[0].main, 'your peg');
+    for (const p of [0, 1]) {
+      const dot = document.getElementById('map-' + p);
+      const go = (ev) => { ev.stopPropagation(); lookAt(holeAt(p, pegs[p] ? pegs[p].front : 0), true); };
+      dot.addEventListener('click', go);
+      dot.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(ev); } });
+    }
+    drawMapPegs(); drawMapCam();
+  }
+  function drawMapPegs() {
+    for (const p of [0, 1]) {
+      const c = document.getElementById('map-' + p); if (!c) continue;
+      const h = holeAt(p, pegs[p] ? pegs[p].front : 0);
+      c.setAttribute('transform', 'translate(' + h.x.toFixed(0) + ' ' + h.y.toFixed(0) + ')');
+    }
+  }
+  // A tap anywhere else on the map looks at the nearest point of the trail.
+  mapEl.addEventListener('click', (ev) => {
+    const m = mapEl.getScreenCTM(); if (!m) return;
+    const pt = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(m.inverse());
+    let best = null, bd = 1e9;
+    for (let i = 0; i < samples.length; i += 4) { const d = Math.hypot(samples[i][0] - pt.x, samples[i][1] - pt.y); if (d < bd) { bd = d; best = samples[i]; } }
+    if (best && bd < 260) lookAt({ x: best[0], y: best[1] }, true);
+  });
+  function drawMapCam() {
+    const c = document.getElementById('map-cam'); if (!c) return;
+    // Four corner marks around what the camera frames: a viewfinder.
+    const k = 1 + cam.lift * 1.7, w = 300 * k, h = 190 * k, l = 70;
+    const x0 = cam.x - w, x1 = cam.x + w, y0 = cam.y + AHEAD - h, y1 = cam.y + AHEAD + h;
+    c.setAttribute('d', 'M' + x0 + ' ' + (y0 + l) + 'V' + y0 + 'H' + (x0 + l) + 'M' + (x1 - l) + ' ' + y0 + 'H' + x1 + 'V' + (y0 + l) +
+      'M' + x1 + ' ' + (y1 - l) + 'V' + y1 + 'H' + (x1 - l) + 'M' + (x0 + l) + ' ' + y1 + 'H' + x0 + 'V' + (y1 - l));
+  }
+
+
+  function newGame(dealer) {
+    g = K.newGame({ seed: (Date.now() % 1000000007), manualCut: true, dealer: dealer === undefined ? null : dealer });
+    match.recorded = false; drawMatch();
+    $('sub').textContent = (match.bestOf === 1 ? 'Single game' : 'Best of ' + match.bestOf) + ' against ' + (level === 'easy' ? 'an easy' : 'a ' + level) + ' opponent';
+    fate = 0; drawFate();
+    pegs.forEach((pg) => { pg.front = 0; pg.back = 0; });
+    $('score-0').textContent = '0'; $('score-1').textContent = '0';
+    placePegs(); drawMapPegs();
+    const s = holeAt(0, 4); cam.x = s.x; cam.y = s.y; cam.lift = 0; applyCam();
+    receipt = null; pileView = []; sel = [];
+    after();
+  }
+
+  document.querySelectorAll('[data-env]').forEach((b) => {
+    b.onclick = () => {
+      place = b.dataset.env;
+      document.querySelectorAll('[data-env]').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+      build(); applyCam();
+    };
+  });
+  document.querySelectorAll('[data-peg]').forEach((b) => {
+    b.onclick = () => {
+      document.querySelectorAll('[data-peg]').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+      setPegStyle(b.dataset.peg);
+    };
+  });
+
+  $('fate-toggle').onclick = () => {
+    fateOn = !fateOn;
+    $('fate-toggle').setAttribute('aria-checked', String(fateOn));
+    if (!fateOn) fate = 0;
+    drawFate();
+  };
+
+  window.__kribbage = { lookAt: (k, p) => lookAt(holeAt(p || 0, k), true), setScores: (a, b) => { pegs[0].front = a; pegs[0].back = Math.max(0, a - 4); pegs[1].front = b; pegs[1].back = Math.max(0, b - 5); placePegs(); drawMapPegs(); } };
+  window.addEventListener('resize', fit);
+  build();
+  fit();
+  requestAnimationFrame(frame);
+  newGame();
+})();
+</script>
