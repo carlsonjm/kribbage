@@ -1,19 +1,21 @@
 import QtQuick
 import org.kde.kirigami as Kirigami
 
-// The window. The table's screens are drawn from the approved mock-up
-// (https://claude.ai/artifact/W1EisEZkPSER1EiHdarwEA) once the owner signs
-// off on the look; until then this only proves the app starts.
+// The window. Everything inside is the game screen (GameView.qml), built
+// to the approved prototype in design/trail-prototype.html.
 Kirigami.ApplicationWindow {
     id: window
     title: "Kribbage"
     width: 1440
     height: 820
     minimumWidth: 720
-    minimumHeight: 520
+    minimumHeight: 560
+    color: "#141414"
 
-    GameController {
-        id: controller
-        Component.onCompleted: newGame()
+    GameView {
+        anchors.fill: parent
+        // Plasma's "animation speed" at its slowest turns flights and the deal off.
+        reducedMotion: Kirigami.Units.longDuration <= 1
+        focus: true
     }
 }

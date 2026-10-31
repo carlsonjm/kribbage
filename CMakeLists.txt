@@ -3,6 +3,7 @@ project(kribbage VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
 
 find_package(ECM 6.0 REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
@@ -27,6 +28,7 @@ qt_add_qml_module(kribbage_mesh
     SOURCES src/meshgeometry.h src/meshgeometry.cpp
 )
 target_link_libraries(kribbage_mesh PRIVATE Qt6::Quick3D)
+target_include_directories(kribbage_mesh PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # The rules engine is plain JavaScript shared with the node tests in test/.
 qt_add_qml_module(kribbage
@@ -34,7 +36,14 @@ qt_add_qml_module(kribbage
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/GameView.qml
         qml/GameController.qml
+        qml/table/Style.qml
+        qml/table/Panel.qml
+        qml/table/Card.qml
+        qml/table/PillButton.qml
+        qml/table/GameMenu.qml
+        qml/table/TrailMap.qml
         engine/cards.mjs
         engine/score.mjs
         engine/game.mjs
@@ -62,5 +71,6 @@ install(FILES packaging/co.goodinput.Kribbage.metainfo.xml DESTINATION ${KDE_INS
 enable_testing()
 find_program(NODE node)
 if(NODE)
-    add_test(NAME engine COMMAND ${NODE} --test ${CMAKE_SOURCE_DIR}/test/score.test.mjs ${CMAKE_SOURCE_DIR}/test/game.test.mjs)
+    file(GLOB NODE_TESTS ${CMAKE_SOURCE_DIR}/test/*.test.mjs)
+    add_test(NAME engine COMMAND ${NODE} --test ${NODE_TESTS})
 endif()

@@ -10,6 +10,9 @@ from PySide6.QtQuick import QQuickWindow  # noqa: F401  (grabWindow)
 import meshgeometry
 
 app = QGuiApplication(sys.argv)
+app.setOrganizationName("Good Input")
+app.setOrganizationDomain("goodinput.co")
+app.setApplicationName("kribbage-preview")
 meshgeometry.register()
 engine = QQmlApplicationEngine()
 engine.warnings.connect(lambda ws: [print("WARN", w.toString()) for w in ws])
@@ -18,6 +21,17 @@ if not engine.rootObjects():
     print("load failed")
     sys.exit(1)
 window = engine.rootObjects()[0]
+out = os.path.splitext(sys.argv[2])[0]
+
+# A page can ask for pictures of its own: signal snap(string name).
+if hasattr(window, "snap"):
+    def snap(name):
+        img = window.grabWindow()
+        img.save(out + "-" + name + ".png")
+        print("snap", name)
+    window.snap.connect(snap)
+if hasattr(window, "finished"):
+    window.finished.connect(lambda: app.quit())
 
 
 def shot():
@@ -26,5 +40,6 @@ def shot():
     app.quit()
 
 
-QTimer.singleShot(int(sys.argv[3]) if len(sys.argv) > 3 else 4000, shot)
+if int(sys.argv[3] if len(sys.argv) > 3 else 4000) > 0:
+    QTimer.singleShot(int(sys.argv[3]) if len(sys.argv) > 3 else 4000, shot)
 sys.exit(app.exec())

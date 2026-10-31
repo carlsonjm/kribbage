@@ -18,7 +18,11 @@ QtObject {
 
     property string level: "steady"
     // How long the computer waits before each move, in ms.
-    property int pace: 700
+    property int pace: 800
+    // Set while the screens are still showing what happened, so the
+    // computer waits its turn instead of racing ahead of the animation.
+    property bool hold: false
+    onHoldChanged: if (!hold) computerTimer.restart()
 
     property var game: null
     // The Fate meter beside the game (fate.mjs), and its own dice so the
@@ -176,6 +180,8 @@ QtObject {
     property Timer computerTimer: Timer {
         interval: controller.pace
         onTriggered: {
+            if (controller.hold)
+                return;
             if (controller.computerStep())
                 controller.changed();
         }
