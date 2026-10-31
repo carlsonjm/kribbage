@@ -61,6 +61,11 @@ Rectangle {
     readonly property string phase: controller.phase
     readonly property bool awaitingFate: controller.fateReady && !running
 
+    // True when `c` is one of the cards in the lifted line of the count.
+    function counted(c) {
+        const line = c && receipt && hilite >= 0 ? receipt.lines[hilite] : null;
+        return !!line && line.cards.some(function (x) { return same(x, c); });
+    }
     function same(a, b) { return !!a && !!b && a.rank === b.rank && a.suit === b.suit; }
     function sorted(hand) {
         return hand.slice().sort(function (a, b) { return a.rank - b.rank || (a.suit < b.suit ? -1 : a.suit > b.suit ? 1 : 0); });
@@ -173,8 +178,8 @@ Rectangle {
             pileView = [];
         } else if (e.type === "show") {
             const s = controller.game.show;
-            receipt = { step: e.step, player: e.player, cards: s.cards.slice(), lines: s.lines, total: e.total };
             hilite = -1;
+            receipt = { step: e.step, player: e.player, cards: s.cards.slice(), lines: s.lines, total: e.total };
             yield wait(600);
         } else if (e.type === "score") {
             yield* peg(e.player, e.points, why(e));
@@ -533,7 +538,7 @@ Rectangle {
                         cardWidth: stage.pw
                         card: root.rev >= 0 && root.g ? root.g.starter : null
                         fated: root.fatedStarter && !!card
-                        raised: !!card && !!root.receipt && root.hilite >= 0 && root.receipt.lines[root.hilite].cards.some(function (x) { return root.same(x, card); })
+                        raised: root.counted(card)
                     }
                 }
                 Slot {
@@ -564,8 +569,7 @@ Rectangle {
                             model: root.receipt ? root.receipt.cards : root.pileView
                             Card {
                                 required property var modelData
-                                readonly property bool counted: !!root.receipt && root.hilite >= 0
-                                    && root.receipt.lines[root.hilite].cards.some(function (x) { return root.same(x, card); })
+                                readonly property bool counted: root.counted(card)
                                 cardWidth: stage.pw
                                 card: root.receipt ? modelData : modelData.card
                                 raised: counted
