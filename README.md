@@ -2,10 +2,10 @@
 
 Two-handed Cribbage for KDE Plasma: you against the computer, first to 121.
 
-Status (30 Oct 2026): the rules, the computer player and the Fate meter are
-done and tested. The look is being settled in a playable 3D prototype
-(https://claude.ai/artifact/XUsJtvepNXREVwYv9cph6Q, copy in `design/`), approved
-on 31 Oct 2026. Next: the Plasma screens, with the trail drawn in Qt Quick 3D.
+Status (31 Oct 2026): the rules, the computer player, the Fate meter and
+match play are done and tested. The look was approved on 31 Oct 2026 as a
+playable 3D prototype (https://claude.ai/artifact/XUsJtvepNXREVwYv9cph6Q, copy
+in `design/`). Next: the Plasma screens, with the trail drawn in Qt Quick 3D.
 
 ## Layout
 
