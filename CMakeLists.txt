@@ -17,6 +17,7 @@ find_package(KF6 6.0 REQUIRED COMPONENTS Kirigami I18n CoreAddons)
 qt_policy(SET QTP0001 NEW)
 
 qt_add_executable(kribbage src/main.cpp)
+qt_add_resources(kribbage "icon" PREFIX "/" FILES packaging/co.goodinput.Kribbage.svg)
 
 # MeshGeometry hands meshes built in JavaScript (board/) to Qt Quick 3D as
 # raw bytes. Its own small module, so the PySide previews in tools/ can
@@ -67,6 +68,7 @@ target_link_libraries(kribbage PRIVATE
 install(TARGETS kribbage ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 install(FILES packaging/co.goodinput.Kribbage.desktop DESTINATION ${KDE_INSTALL_APPDIR})
 install(FILES packaging/co.goodinput.Kribbage.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
+install(FILES packaging/co.goodinput.Kribbage.svg DESTINATION ${KDE_INSTALL_FULL_ICONDIR}/hicolor/scalable/apps)
 
 enable_testing()
 find_program(NODE node)

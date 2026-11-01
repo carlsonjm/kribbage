@@ -1,4 +1,5 @@
-#include <QApplication>
+#include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QSurfaceFormat>
@@ -9,9 +10,10 @@
 
 int main(int argc, char *argv[])
 {
-    // A depth buffer and multisampling for the 3D trail.
+    QGuiApplication app(argc, argv);
+    // A depth buffer and multisampling for the 3D trail. Asked for once the
+    // app exists: Qt probes the graphics driver to choose it.
     QSurfaceFormat::setDefaultFormat(QQuick3D::idealSurfaceFormat(4));
-    QApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("Good Input"));
     KLocalizedString::setApplicationDomain("kribbage");
 
@@ -21,6 +23,9 @@ int main(int argc, char *argv[])
     about.setDesktopFileName(QStringLiteral("co.goodinput.Kribbage"));
     about.setOrganizationDomain("goodinput.co");
     KAboutData::setApplicationData(about);
+    // The installed icon, or the copy built in when run from the build folder.
+    QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("co.goodinput.Kribbage"),
+                                                    QIcon(QStringLiteral(":/packaging/co.goodinput.Kribbage.svg"))));
 
     if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE"))
         QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
