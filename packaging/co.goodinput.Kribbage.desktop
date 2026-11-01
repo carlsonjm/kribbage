@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Kribbage
+GenericName=Cribbage
+Comment=Play Cribbage against the computer
+Exec=kribbage
+Icon=co.goodinput.Kribbage
+Categories=Game;CardGame;Qt;KDE;
+Keywords=cribbage;cards;crib;pegging;

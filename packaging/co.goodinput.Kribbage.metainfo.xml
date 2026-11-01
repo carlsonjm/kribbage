@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>co.goodinput.Kribbage</id>
+  <name>Kribbage</name>
+  <summary>Play Cribbage against the computer</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="co.goodinput"><name>Good Input</name></developer>
+  <description>
+    <p>Two-handed Cribbage to 121, against a computer player at three strengths.
+    Choose your crib, play to 31, and see every hand counted line by line, so
+    the scoring is never a mystery.</p>
+  </description>
+  <launchable type="desktop-id">co.goodinput.Kribbage.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+  <categories><category>Game</category><category>CardGame</category></categories>
+  <releases><release version="0.1.0" date="2026-11-01"/></releases>
+</component>
